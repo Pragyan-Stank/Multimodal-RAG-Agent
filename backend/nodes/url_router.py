@@ -1,15 +1,15 @@
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.state import AgentState
-from backend.config import INTENT_CLASSIFIER_MODEL, CHAR_LIMIT, make_llm
+from backend.config import INTENT_CLASSIFIER_MODEL, CHAR_LIMIT
 from backend.tools.youtube_tools import youtube_transcript_tool, extract_video_id
 from backend.tools.web_tools import url_classifier
 from backend.tools.summarizer import map_reduce_summarizer
 
-intent_classifier_llm = make_llm(INTENT_CLASSIFIER_MODEL)
+intent_classifier_llm = ChatGroq(model=INTENT_CLASSIFIER_MODEL)
 
 
-def url_router_node(state):
+def url_router_node(state:AgentState):
 
     extracted_contents = state["extracted_contents"]
 
@@ -110,7 +110,7 @@ def url_router_node(state):
 
 
 
-def should_process_urls(state):
+def should_process_urls(state:AgentState):
     """
     Route to url_router ONLY if:
     - YouTube URLs were found in the document, AND

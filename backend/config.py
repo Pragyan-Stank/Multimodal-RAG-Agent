@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
-from langchain_core.runnables import RunnableWithFallbacks
+
 load_dotenv()
 
 # API keys
@@ -43,18 +42,4 @@ if "__file__" in globals():
 else:
     cwd = Path.cwd()
     PROJECT_ROOT = cwd.parent if cwd.name == "notebooks" else cwd
-
-
-
-
-def make_llm(model: str, retries: int = 3) -> ChatGroq:
-    """
-    Returns a ChatGroq instance wrapped with retry logic.
-    Any transient API error will be retried up to `retries` times
-    before raising.
-    """
-    llm = ChatGroq(model=model)
-    return llm.with_retry(
-        stop_after_attempt=retries,
-        wait_exponential_jitter=True   # adds jitter to avoid thundering herd
-    )
+    

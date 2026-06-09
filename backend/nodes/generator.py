@@ -2,9 +2,9 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.state import AgentState
 from backend.prompts import GENERATE_SYSTEM_PROMPT
-from backend.config import GENERATOR_MODEL,make_llm
+from backend.config import GENERATOR_MODEL
 
-generator_llm = make_llm(GENERATOR_MODEL)
+generator_llm = ChatGroq(model=GENERATOR_MODEL)
 
 def generate_node(state:AgentState):
 

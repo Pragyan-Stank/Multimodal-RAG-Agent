@@ -2,10 +2,10 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.state import AgentState, PlannerDecision
 from backend.prompts import PLANNER_SYSTEM_PROMPT
-from backend.config import PLANNER_MODEL,make_llm
+from backend.config import PLANNER_MODEL
 
 
-llm = make_llm(PLANNER_MODEL)
+llm = ChatGroq(model=PLANNER_MODEL)
 planner_llm = llm.with_structured_output(PlannerDecision, method="json_mode")
 
 
