@@ -4,20 +4,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain.tools import tool
 from groq import Groq
 from backend.config import PROJECT_ROOT, MAX_CHUNK_MB, MAX_WORKERS, AUDIO_MODEL
+from backend.utils.retry import llm_retry
 
 client = Groq()
 
 
-def split_audio_ffmpeg(
-    audio_path: str,
-    target_chunk_mb: int = MAX_CHUNK_MB
-):
+def split_audio_ffmpeg(audio_path: str, target_chunk_mb: int = MAX_CHUNK_MB):
     """
     Split large audio files into chunks using ffmpeg.
     """
-
     path = Path(audio_path)
-
     size_mb = path.stat().st_size / (1024 * 1024)
 
     if size_mb <= target_chunk_mb:
@@ -32,33 +28,20 @@ def split_audio_ffmpeg(
     ]
 
     duration = float(
-        subprocess.check_output(duration_cmd)
-        .decode()
-        .strip()
+        subprocess.check_output(duration_cmd).decode().strip()
     )
 
-    num_chunks = math.ceil(
-        size_mb / target_chunk_mb
-    )
-
+    num_chunks = math.ceil(size_mb / target_chunk_mb)
     chunk_duration = duration / num_chunks
-
     temp_dir = tempfile.mkdtemp()
-
     chunk_paths = []
 
     for i in range(num_chunks):
-
         start_time = i * chunk_duration
-
-        output_file = os.path.join(
-            temp_dir,
-            f"chunk_{i}.mp3"
-        )
+        output_file = os.path.join(temp_dir, f"chunk_{i}.mp3")
 
         cmd = [
-            "ffmpeg",
-            "-y",
+            "ffmpeg", "-y",
             "-i", str(path),
             "-ss", str(start_time),
             "-t", str(chunk_duration),
@@ -77,27 +60,36 @@ def split_audio_ffmpeg(
     return chunk_paths, temp_dir
 
 
+# ---------------------------------
+# Retryable internal calls
+# ---------------------------------
 
-def transcribe_chunk(chunk_path: str):
-
-    with open(chunk_path, "rb") as f:
-
+@llm_retry
+def _transcribe_single(path: Path) -> str:
+    """Single file transcription with retry."""
+    with open(path, "rb") as f:
         result = client.audio.transcriptions.create(
             file=f,
             model=AUDIO_MODEL
         )
+    return result.text
 
-    chunk_num = int(
-        Path(chunk_path)
-        .stem
-        .split("_")[-1]
-    )
 
+@llm_retry
+def transcribe_chunk(chunk_path: str) -> tuple[int, str]:
+    """Single chunk transcription with retry — used in parallel executor."""
+    with open(chunk_path, "rb") as f:
+        result = client.audio.transcriptions.create(
+            file=f,
+            model=AUDIO_MODEL
+        )
+    chunk_num = int(Path(chunk_path).stem.split("_")[-1])
     return chunk_num, result.text
 
 
-
-
+# ---------------------------------
+# Tool
+# ---------------------------------
 
 @tool
 def transcribe_audio(audio_path: str) -> dict:
@@ -106,11 +98,9 @@ def transcribe_audio(audio_path: str) -> dict:
     Automatically chunks large audio files and
     transcribes chunks in parallel.
     """
-
     temp_dir = None
 
     try:
-
         path = Path(audio_path)
 
         if not path.is_absolute():
@@ -119,74 +109,53 @@ def transcribe_audio(audio_path: str) -> dict:
         path = path.resolve()
 
         if not path.exists():
-
             return {
                 "success": False,
                 "error": f"Audio file not found: {path}"
             }
 
-        size_mb = path.stat().st_size / (
-            1024 * 1024
-        )
+        size_mb = path.stat().st_size / (1024 * 1024)
 
         # ----------------------------
         # Small File
         # ----------------------------
-
         if size_mb <= MAX_CHUNK_MB:
-
-            with open(path, "rb") as f:
-
-                result = (
-                    client.audio.transcriptions.create(
-                        file=f,
-                        model="whisper-large-v3-turbo"
-                    )
-                )
-
+            transcript = _transcribe_single(path)
             return {
                 "success": True,
                 "file_path": str(path),
                 "num_chunks": 1,
-                "transcript": result.text
+                "transcript": transcript
             }
 
         # ----------------------------
         # Large File
         # ----------------------------
-
-        chunk_paths, temp_dir = split_audio_ffmpeg(
-            str(path)
-        )
-
+        chunk_paths, temp_dir = split_audio_ffmpeg(str(path))
         transcripts = {}
 
         with ThreadPoolExecutor(
-            max_workers=min(
-                MAX_WORKERS,
-                len(chunk_paths)
-            )
+            max_workers=min(MAX_WORKERS, len(chunk_paths))
         ) as executor:
 
-            futures = [
-                executor.submit(
-                    transcribe_chunk,
-                    chunk
-                )
+            futures = {
+                executor.submit(transcribe_chunk, chunk): chunk
                 for chunk in chunk_paths
-            ]
+            }
 
             for future in as_completed(futures):
-
-                chunk_id, text = future.result()
-
-                transcripts[chunk_id] = text
+                try:
+                    chunk_id, text = future.result()
+                    transcripts[chunk_id] = text
+                except Exception as e:
+                    # one chunk failing shouldn't kill the entire transcription
+                    chunk_path = futures[future]
+                    chunk_num = int(Path(chunk_path).stem.split("_")[-1])
+                    transcripts[chunk_num] = f"[chunk transcription failed: {str(e)}]"
 
         merged_transcript = "\n".join(
             transcripts[i]
-            for i in sorted(
-                transcripts.keys()
-            )
+            for i in sorted(transcripts.keys())
         )
 
         return {
@@ -197,16 +166,11 @@ def transcribe_audio(audio_path: str) -> dict:
         }
 
     except Exception as e:
-
         return {
             "success": False,
             "error": str(e)
         }
 
     finally:
-
         if temp_dir and os.path.exists(temp_dir):
-            shutil.rmtree(
-                temp_dir,
-                ignore_errors=True
-            )
+            shutil.rmtree(temp_dir, ignore_errors=True)

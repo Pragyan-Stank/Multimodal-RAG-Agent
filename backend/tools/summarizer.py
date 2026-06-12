@@ -2,9 +2,30 @@ from langchain.tools import tool
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from groq import Groq
 from backend.config import CHAR_LIMIT, SUMMARIZER_MODEL
+from backend.utils.retry import llm_retry
 
 client = Groq()
 
+
+# ---------------------------------
+# Retryable internal call
+# ---------------------------------
+
+@llm_retry
+def _call_llm(messages: list, max_tokens: int) -> str:
+    """Single LLM call with retry — used for all three summarization phases."""
+    response = client.chat.completions.create(
+        model=SUMMARIZER_MODEL,
+        messages=messages,
+        max_tokens=max_tokens,
+        temperature=0
+    )
+    return response.choices[0].message.content
+
+
+# ---------------------------------
+# Tool
+# ---------------------------------
 
 @tool
 def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
@@ -23,17 +44,14 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
         text:        The raw text to summarize.
         source_type: Label for logging — 'pdf', 'audio', 'youtube', etc.
     """
-
     try:
 
         # -------------------------------------------------------
         # Short enough — summarize directly in one shot
         # -------------------------------------------------------
-
         if len(text) <= CHAR_LIMIT:
 
-            response = client.chat.completions.create(
-                model=SUMMARIZER_MODEL,
+            summary = _call_llm(
                 messages=[
                     {
                         "role": "system",
@@ -44,39 +62,33 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
                     },
                     {
                         "role": "user",
-                        "content": (
-                            f"Summarize the following {source_type}:\n\n{text}"
-                        )
+                        "content": f"Summarize the following {source_type}:\n\n{text}"
                     }
                 ],
-                max_tokens=800,
-                temperature=0
+                max_tokens=800
             )
 
             return {
-                "success":    True,
-                "strategy":   "direct",
+                "success": True,
+                "strategy": "direct",
                 "num_chunks": 1,
-                "summary":    response.choices[0].message.content
+                "summary": summary
             }
 
         # -------------------------------------------------------
         # Too large — MAP phase: chunk and summarize each piece
         # -------------------------------------------------------
-
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size    = CHAR_LIMIT,
-            chunk_overlap = 800           # ~200 tokens overlap to avoid losing context at boundaries
+            chunk_size=CHAR_LIMIT,
+            chunk_overlap=800
         )
 
         chunks = splitter.split_text(text)
-
         chunk_summaries = []
 
         for i, chunk in enumerate(chunks):
 
-            response = client.chat.completions.create(
-                model=SUMMARIZER_MODEL,
+            summary = _call_llm(
                 messages=[
                     {
                         "role": "system",
@@ -94,25 +106,20 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
                         )
                     }
                 ],
-                max_tokens=600,
-                temperature=0
+                max_tokens=600
             )
 
-            chunk_summaries.append(
-                response.choices[0].message.content
-            )
+            chunk_summaries.append(summary)
 
         # -------------------------------------------------------
         # REDUCE phase: combine chunk summaries into final summary
         # -------------------------------------------------------
-
         combined = "\n\n---\n\n".join(
             f"[Section {i+1}]\n{s}"
             for i, s in enumerate(chunk_summaries)
         )
 
-        reduce_response = client.chat.completions.create(
-            model=SUMMARIZER_MODEL,
+        final_summary = _call_llm(
             messages=[
                 {
                     "role": "system",
@@ -133,21 +140,19 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
                     )
                 }
             ],
-            max_tokens=1000,
-            temperature=0
+            max_tokens=1000
         )
 
         return {
-            "success":         True,
-            "strategy":        "map_reduce",
-            "num_chunks":      len(chunks),
+            "success": True,
+            "strategy": "map_reduce",
+            "num_chunks": len(chunks),
             "chunk_summaries": chunk_summaries,
-            "summary":         reduce_response.choices[0].message.content
+            "summary": final_summary
         }
 
     except Exception as e:
-
         return {
             "success": False,
-            "error":   str(e)
+            "error": str(e)
         }
