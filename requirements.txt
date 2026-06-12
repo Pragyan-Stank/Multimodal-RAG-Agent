@@ -39,3 +39,5 @@ pydub
 audioop-lts
 
 langgraph-checkpoint-sqlite
+
+tenacity

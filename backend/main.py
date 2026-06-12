@@ -60,6 +60,6 @@ def run(query: str, file_paths: list[str], thread_id: str | None = None):
 
 if __name__ == "__main__":
     run(
-        query="tell me",
-        file_paths=[str(UPLOAD_DIR / "crag.pdf")]
+        query="whether the audio podcast discuss the same topic as discussed in pdf?",
+        file_paths=[str(UPLOAD_DIR / "crag.pdf"),str(UPLOAD_DIR / "CRAG_fixes_AI_hallucinations.m4a")]
     )
