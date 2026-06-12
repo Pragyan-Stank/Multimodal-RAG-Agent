@@ -36,4 +36,6 @@ ipywidgets
 
 youtube-transcript-api
 pydub
-pyaudioop
+audioop-lts
+
+langgraph-checkpoint-sqlite

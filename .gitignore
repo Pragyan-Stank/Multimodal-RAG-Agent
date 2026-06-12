@@ -14,3 +14,5 @@ wheels/
 /backend/data
 /backend/__pycache__/
 /notebooks
+
+checkpoints.db

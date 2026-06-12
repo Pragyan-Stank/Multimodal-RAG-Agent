@@ -3,7 +3,6 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
 import operator
 
-
 class AgentState(TypedDict):
     query: str
     uploaded_files: list[str]
@@ -16,8 +15,10 @@ class AgentState(TypedDict):
     clarification_question: str
     clarification_attempts: int
     awaiting_clarification: bool
-    extracted_contents: dict
-    urls_found: list[str]
+    extracted_contents: Annotated[dict, lambda old, new: {
+    "files": {**old.get("files", {}), **new.get("files", {})}
+    }]
+    urls_found: Annotated[list[str], lambda old, new: list(set(old + new))]
     youtube_urls: list[str]
     web_urls: list[str]
     messages: Annotated[list[BaseMessage], operator.add]

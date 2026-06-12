@@ -56,10 +56,10 @@ def planner_node(state: AgentState):
 
 MAX_CLARIFICATION_ATTEMPTS = 3
 
-def after_planner(state: AgentState):
-    if state.get("needs_clarification"):
-        if state.get("clarification_attempts", 0) >= MAX_CLARIFICATION_ATTEMPTS:
-            # Give up, route to generate with whatever we have
-            return "executor"
-        return "clarification"
-    return "executor"
+# def after_planner(state: AgentState):
+#     if state.get("needs_clarification"):
+#         if state.get("clarification_attempts", 0) >= MAX_CLARIFICATION_ATTEMPTS:
+#             # Give up, route to generate with whatever we have
+#             return "executor"
+#         return "clarification"
+#     return "executor"

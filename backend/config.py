@@ -15,8 +15,8 @@ os.environ["LANGSMITH_PROJECT"] = "Multimodal agent trace4"
 os.environ["LANGSMITH_ENDPOINT"] = os.getenv("LANGSMITH_ENDPOINT", "")
 
 # Models
-PLANNER_MODEL = "openai/gpt-oss-120b"
-GENERATOR_MODEL = "openai/gpt-oss-120b"
+PLANNER_MODEL = "llama-3.3-70b-versatile"
+GENERATOR_MODEL = "llama-3.3-70b-versatile"
 INTENT_CLASSIFIER_MODEL = "llama-3.3-70b-versatile"
 SUMMARIZER_MODEL = "llama-3.3-70b-versatile"
 AUDIO_MODEL = "whisper-large-v3-turbo"

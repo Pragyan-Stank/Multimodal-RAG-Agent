@@ -1,3 +1,4 @@
+import uuid
 from langgraph.types import Command
 import sys
 from pathlib import Path
@@ -11,7 +12,14 @@ UPLOAD_DIR = app_config.PROJECT_ROOT / "data" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def run(query: str, file_paths: list[str]):
+def run(query: str, file_paths: list[str], thread_id: str | None = None):
+    """
+    thread_id: pass a stable ID to resume an existing session,
+               or None to start a fresh one.
+    """
+    thread_id = thread_id or str(uuid.uuid4())
+    graph_config = {"configurable": {"thread_id": thread_id}}
+
     initial_state = {
         "query": query,
         "uploaded_files": file_paths,
@@ -30,29 +38,24 @@ def run(query: str, file_paths: list[str]):
         "final_answer": ""
     }
 
-    graph_config = {"configurable": {"thread_id": "session_1"}}
+    print(f"[Session: {thread_id}]")
 
     for event in graph.stream(initial_state, config=graph_config):
         print(event)
         print("=" * 80)
 
-    # Keep asking until graph finishes
     while True:
         snapshot = graph.get_state(graph_config)
-
-        # No more interrupts — graph is done
         if not snapshot.next:
             break
 
-        # Graph is waiting for clarification — ask the user
-        user_response = input("\nAgent is asking for clarification.\nYou: ").strip()
+        user_response = input("\nAgent needs clarification.\nYou: ").strip()
 
-        for event in graph.stream(
-            Command(resume=user_response),
-            config=graph_config
-        ):
+        for event in graph.stream(Command(resume=user_response), config=graph_config):
             print(event)
             print("=" * 80)
+
+    return thread_id
 
 
 if __name__ == "__main__":
