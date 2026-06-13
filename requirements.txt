@@ -41,3 +41,5 @@ audioop-lts
 langgraph-checkpoint-sqlite
 
 tenacity
+
+pydantic-settings

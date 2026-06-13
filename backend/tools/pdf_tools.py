@@ -1,10 +1,10 @@
+from backend.config import get_embeddings,PROJECT_ROOT
 import re
 from pathlib import Path
 from langchain.tools import tool
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from backend.config import PROJECT_ROOT, embeddings
 
 @tool
 def pdf_parser(file_path: str) -> dict:
@@ -83,7 +83,7 @@ def document_retriever(
 
         vector_store = FAISS.from_documents(
             chunks,
-            embeddings
+            get_embeddings()
         )
 
         retriever = vector_store.as_retriever(

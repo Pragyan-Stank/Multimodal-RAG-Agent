@@ -60,6 +60,6 @@ def run(query: str, file_paths: list[str], thread_id: str | None = None):
 
 if __name__ == "__main__":
     run(
-        query="What is HyDE in RAGs?",
+        query="What is RAG?",
         file_paths=[]
     )

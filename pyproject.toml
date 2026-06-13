@@ -27,6 +27,7 @@ dependencies = [
     "langserve>=0.3.3",
     "langsmith>=0.8.9",
     "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.1",
     "pydub>=0.25.1",
     "pymupdf>=1.27.2.3",
     "pypdf>=6.13.0",
