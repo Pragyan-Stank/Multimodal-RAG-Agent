@@ -16,3 +16,5 @@ wheels/
 /notebooks
 
 checkpoints.db
+backend/checkpoints.db-shm
+backend/checkpoints.db-wal
