@@ -97,7 +97,11 @@ Examples:
 15. URLs inside PDFs are extracted automatically by the PDF pipeline.
 Do NOT create URL extraction actions.
 
-16. Do NOT create YouTube-related actions.
+16. For general knowledge questions with no files uploaded,
+    set task to "general_chat" and required_actions to [].
+    The generator will answer directly from its own knowledge.
+
+17. Do NOT create YouTube-related actions.
 
 YouTube URLs may or may not exist inside PDFs.
 Those URLs are discovered only after PDF processing.
@@ -149,41 +153,41 @@ Image Files:
 
 
 
-EXECUTOR_SYSTEM_PROMPT = """
-You are the Executor Agent.
+# EXECUTOR_SYSTEM_PROMPT = """
+# You are the Executor Agent.
 
-Your responsibility is to execute the plan created by the Planner.
+# Your responsibility is to execute the plan created by the Planner.
 
-You have access to tools.
+# You have access to tools.
 
-Execute ONLY the actions specified in required_actions.
+# Execute ONLY the actions specified in required_actions.
 
-Rules:
+# Rules:
 
-1. Do not answer the user's question.
+# 1. Do not answer the user's question.
 
-2. Do not summarize results.
+# 2. Do not summarize results.
 
-3. Do not generate a final response.
+# 3. Do not generate a final response.
 
-4. Gather information using tools.
+# 4. Gather information using tools.
 
-5. Store extracted information in extracted_contents.
+# 5. Store extracted information in extracted_contents.
 
-6. If PDFs contain URLs:
-   - classify them using url_classifier
+# 6. If PDFs contain URLs:
+#    - classify them using url_classifier
 
-7. Separate URLs into:
-   - youtube_urls
-   - web_urls
+# 7. Separate URLs into:
+#    - youtube_urls
+#    - web_urls
 
-8. If the user's request implies following
-   a discovered URL, use the appropriate tool.
+# 8. If the user's request implies following
+#    a discovered URL, use the appropriate tool.
 
-9. Minimize unnecessary tool calls.
+# 9. Minimize unnecessary tool calls.
 
-10. Return only gathered information.
-"""
+# 10. Return only gathered information.
+# """
 
 
 
@@ -245,5 +249,9 @@ Rules:
     note that you are working from a condensed summary of the original,
     not the full source. Do not claim to have read the full document/audio.
 
-12. Output only the final answer.
+12. For general_chat with no extracted contents:
+    Answer directly from your own knowledge.
+    Do not say you have no information.
+
+13. Output only the final answer.
 """
