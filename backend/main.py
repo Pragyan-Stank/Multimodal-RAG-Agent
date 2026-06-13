@@ -60,6 +60,6 @@ def run(query: str, file_paths: list[str], thread_id: str | None = None):
 
 if __name__ == "__main__":
     run(
-        query="What is RAG?",
-        file_paths=[]
+        query="summarise the yt video if any yt link is present in the pdf.",
+        file_paths=[str(UPLOAD_DIR / "pdf_containing_url.pdf")]
     )

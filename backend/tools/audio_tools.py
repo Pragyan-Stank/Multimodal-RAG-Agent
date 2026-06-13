@@ -17,7 +17,7 @@ def split_audio_ffmpeg(audio_path: str, target_chunk_mb: int = MAX_CHUNK_MB):
     size_mb = path.stat().st_size / (1024 * 1024)
 
     if size_mb <= target_chunk_mb:
-        return [str(path)]
+        return [str(path)],None
 
     duration_cmd = [
         "ffprobe",

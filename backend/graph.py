@@ -60,6 +60,3 @@ graph = builder.compile(
     interrupt_before=["clarification"]
 )
 
-
-
-# why not directly go from planner to generate when for general chat - qa task?

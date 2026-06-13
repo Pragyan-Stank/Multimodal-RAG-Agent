@@ -18,7 +18,7 @@ class AgentState(TypedDict):
     extracted_contents: Annotated[dict, lambda old, new: {
     "files": {**old.get("files", {}), **new.get("files", {})}
     }]
-    urls_found: Annotated[list[str], lambda old, new: list(set(old + new))]
+    urls_found: Annotated[list[str], lambda old, new: list(set(new))]
     youtube_urls: list[str]
     web_urls: list[str]
     messages: Annotated[list[BaseMessage], operator.add]
