@@ -1,15 +1,14 @@
 import uuid
 import json
+import asyncio
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, AIMessage
 
 from backend.api.schemas import (
     ChatRequest, ChatResponse,
     ResetRequest, ResetResponse
 )
-from backend.graph import graph
-from backend.config import PROJECT_ROOT
+from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter()
 
@@ -28,13 +27,10 @@ NODE_MESSAGES = {
     "give_up":         "Could not determine intent.",
 }
 
-WORKER_MESSAGES = {
-    "pdf_worker":   "Reading PDF...",
-    "audio_worker": "Transcribing audio...",
-    "image_worker": "Analyzing image...",
-    "web_worker":   "Searching the web...",
-}
 
+# ---------------------------------
+# Helpers
+# ---------------------------------
 
 def build_initial_state(request: ChatRequest) -> dict:
     return {
@@ -60,38 +56,50 @@ def build_graph_config(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
 
 
+def _sse(event_type: str, data: dict) -> str:
+    """Format a Server-Sent Event string."""
+    payload = json.dumps({"type": event_type, **data})
+    return f"data: {payload}\n\n"
+
+
 # ---------------------------------
 # POST /chat  (non-streaming)
 # ---------------------------------
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest,req:Request):
     """
     Run the agent graph and return the final answer.
     Non-streaming — waits for full completion.
     """
     thread_id = request.thread_id or str(uuid.uuid4())
     graph_config = build_graph_config(thread_id)
+    graph=req.app.state.graph
 
     try:
         final_state = None
 
-        for event in graph.stream(
+        async for event in graph.astream(
             build_initial_state(request),
             config=graph_config,
             stream_mode="values"
         ):
             final_state = event
 
-        if not final_state or not final_state.get("final_answer"):
+        if not final_state:
+            raise HTTPException(status_code=500, detail="Graph returned no state.")
+
+        if not final_state.get("final_answer"):
             raise HTTPException(status_code=500, detail="Graph did not produce a final answer.")
 
         return ChatResponse(
             thread_id=thread_id,
-            final_answer=final_state.get("final_answer", ""),
+            final_answer=final_state["final_answer"],
             task=final_state.get("task", "")
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -101,33 +109,31 @@ async def chat(request: ChatRequest):
 # ---------------------------------
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest,req:Request):
     """
     Run the agent graph and stream node-level status
-    events followed by the final answer.
+    events followed by the final answer token by token.
     """
     thread_id = request.thread_id or str(uuid.uuid4())
     graph_config = build_graph_config(thread_id)
+    graph=req.app.state.graph
 
-    def event_stream():
+    async def event_stream():
         try:
-            seen_workers = set()
-
-            for event in graph.stream(
+            async for event in graph.astream(
                 build_initial_state(request),
                 config=graph_config,
                 stream_mode="updates"
             ):
                 for node_name, node_output in event.items():
-                    # print(f"NODE: {node_name}, KEYS: {list(node_output.keys())}")  # debug
-                    # --- executor_worker: emit per-worker status ---
-                    if node_name == "executor_worker":
-                        actions = node_output.get("extracted_contents", {}).get("files", {})
-                        for action_id in actions:
-                            # get worker type from action if available
-                            msg = "Processing files..."
-                            yield _sse("status", {"node": node_name, "message": msg})
-                        continue
+
+                    # --- status event for every node ---
+                    message = NODE_MESSAGES.get(node_name)
+                    if message:
+                        yield _sse("status", {
+                            "node": node_name,
+                            "message": message
+                        })
 
                     # --- clarification interrupt ---
                     if node_name == "clarification":
@@ -138,22 +144,17 @@ async def chat_stream(request: ChatRequest):
                         })
                         continue
 
-                    # --- all other nodes ---
-                    message = NODE_MESSAGES.get(node_name)
-                    if message:
-                        yield _sse("status", {"node": node_name, "message": message})
-
-                    # --- emit final answer when generate node completes ---
-                    if node_name == "generate" or node_name == "give_up":
+                    # --- stream final answer token by token ---
+                    if node_name in ("generate", "give_up"):
                         final_answer = node_output.get("final_answer", "")
                         if final_answer:
-                            # stream answer word by word
                             words = final_answer.split(" ")
                             for i, word in enumerate(words):
                                 chunk = word if i == 0 else " " + word
                                 yield _sse("token", {"content": chunk})
+                                await asyncio.sleep(0)  # yield control to event loop
 
-            # --- done ---
+            # --- stream complete ---
             yield _sse("done", {"thread_id": thread_id})
 
         except Exception as e:
@@ -164,7 +165,7 @@ async def chat_stream(request: ChatRequest):
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no"    # disables nginx buffering
+            "X-Accel-Buffering": "no"
         }
     )
 
@@ -174,32 +175,17 @@ async def chat_stream(request: ChatRequest):
 # ---------------------------------
 
 @router.post("/chat/reset", response_model=ResetResponse)
-async def reset_chat(request: ResetRequest):
+async def reset_chat(request: ResetRequest,req:Request):
     """
-    Clear a thread's state from the checkpointer.
-    Effectively starts a new conversation.
+    Reset a session by issuing a new thread_id.
+    Client uses the returned thread_id for subsequent requests.
     """
     try:
-        # SqliteSaver doesn't expose a delete API directly
-        # so we write an empty state to effectively reset the thread
-        graph_config = build_graph_config(request.thread_id)
         new_thread_id = str(uuid.uuid4())
-
         return ResetResponse(
             thread_id=new_thread_id,
             success=True,
             message="Session reset. Use the new thread_id for your next request."
         )
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ---------------------------------
-# SSE helper
-# ---------------------------------
-
-def _sse(event_type: str, data: dict) -> str:
-    """Format a Server-Sent Event string."""
-    payload = json.dumps({"type": event_type, **data})
-    return f"data: {payload}\n\n"

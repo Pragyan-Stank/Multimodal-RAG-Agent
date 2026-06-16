@@ -2027,6 +2027,7 @@ name = "multimodal-agent"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiosqlite" },
     { name = "arxiv" },
     { name = "audioop-lts" },
     { name = "bs4" },
@@ -2066,6 +2067,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "arxiv", specifier = ">=4.0.0" },
     { name = "audioop-lts", specifier = ">=0.2.2" },
     { name = "bs4", specifier = ">=0.0.2" },

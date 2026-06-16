@@ -3,8 +3,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from backend.state import AgentState
 from backend.prompts import GENERATE_SYSTEM_PROMPT
 from backend.config import GENERATOR_MODEL
-from backend.utils.retry import llm_retry
-
+from backend.utils.retry import async_llm_retry
 
 generator_llm = ChatGroq(model=GENERATOR_MODEL)
 
@@ -13,10 +12,9 @@ generator_llm = ChatGroq(model=GENERATOR_MODEL)
 # Retryable internal call
 # ---------------------------------
 
-@llm_retry
-def _call_generator(messages: list) -> str:
-    """Generator LLM call with retry."""
-    response = generator_llm.invoke(messages)
+async def _call_generator(messages: list) -> str:
+    """Async generator LLM call with retry."""
+    response = await async_llm_retry(generator_llm.ainvoke, messages)
     return response.content
 
 
@@ -24,7 +22,7 @@ def _call_generator(messages: list) -> str:
 # Node
 # ---------------------------------
 
-def generate_node(state: AgentState):
+async def generate_node(state: AgentState):
 
     messages = [
         SystemMessage(content=GENERATE_SYSTEM_PROMPT),
@@ -46,6 +44,5 @@ def generate_node(state: AgentState):
         )
     ]
 
-    final_answer = _call_generator(messages)
-
+    final_answer = await _call_generator(messages)
     return {"final_answer": final_answer}

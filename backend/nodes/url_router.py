@@ -1,3 +1,4 @@
+import asyncio
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.state import AgentState
@@ -5,8 +6,7 @@ from backend.config import INTENT_CLASSIFIER_MODEL, CHAR_LIMIT
 from backend.tools.youtube_tools import youtube_transcript_tool, extract_video_id
 from backend.tools.web_tools import url_classifier
 from backend.tools.summarizer import map_reduce_summarizer
-from backend.utils.retry import llm_retry, api_retry
-
+from backend.utils.retry import async_llm_retry, async_api_retry
 
 intent_classifier_llm = ChatGroq(model=INTENT_CLASSIFIER_MODEL)
 
@@ -15,16 +15,9 @@ intent_classifier_llm = ChatGroq(model=INTENT_CLASSIFIER_MODEL)
 # Retryable internal calls
 # ---------------------------------
 
-@api_retry
-def _fetch_youtube_transcript(video_id: str) -> dict:
-    """YouTube transcript fetch with retry."""
-    return youtube_transcript_tool.invoke({"video_id": video_id})
-
-
-@llm_retry
-def _call_intent_classifier(messages: list) -> str:
-    """Intent classifier LLM call with retry."""
-    response = intent_classifier_llm.invoke(messages)
+async def _call_intent_classifier(messages: list) -> str:
+    """Async intent classifier LLM call with retry."""
+    response = await async_llm_retry(intent_classifier_llm.ainvoke, messages)
     return response.content
 
 
@@ -32,34 +25,29 @@ def _call_intent_classifier(messages: list) -> str:
 # Nodes
 # ---------------------------------
 
-def url_router_node(state: AgentState):
+async def url_router_node(state: AgentState):
 
     extracted_contents = state["extracted_contents"]
     counter = 1
 
     for url in state["urls_found"]:
-
         try:
-            classification = url_classifier.invoke({"url": url})
+            classification = url_classifier(url)
 
             if not classification["success"]:
                 counter += 1
                 continue
 
-            # -------------------------
-            # YouTube URL
-            # -------------------------
             if classification["type"] == "youtube":
-
                 video_id = extract_video_id(url)
-                result = _fetch_youtube_transcript(video_id)
+                result = await youtube_transcript_tool(video_id)
                 raw_transcript = result.get("transcript", "")
 
                 if raw_transcript and len(raw_transcript) > CHAR_LIMIT:
-                    summary_result = map_reduce_summarizer.invoke({
-                        "text": raw_transcript,
-                        "source_type": "youtube"
-                    })
+                    summary_result = await map_reduce_summarizer(
+                        text=raw_transcript,
+                        source_type="youtube"
+                    )
                     transcript_to_store = (
                         summary_result["summary"]
                         if summary_result["success"]
@@ -88,7 +76,7 @@ def url_router_node(state: AgentState):
     return {"extracted_contents": extracted_contents}
 
 
-def should_process_urls(state: AgentState):
+async def should_process_urls(state: AgentState):
     """
     Route to url_router ONLY if:
     - YouTube URLs were found in the document, AND
@@ -118,7 +106,7 @@ def should_process_urls(state: AgentState):
         ))
     ]
 
-    answer = _call_intent_classifier(messages)
+    answer = await _call_intent_classifier(messages)
 
     if answer.strip().lower().startswith("yes"):
         return "url_router"

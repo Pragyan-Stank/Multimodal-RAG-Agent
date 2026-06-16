@@ -1,34 +1,34 @@
-from langchain.tools import tool
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from groq import Groq
+from groq import AsyncGroq
 from backend.config import CHAR_LIMIT, SUMMARIZER_MODEL
-from backend.utils.retry import llm_retry
+from backend.utils.retry import async_llm_retry
 
-client = Groq()
+client = AsyncGroq()
 
 
 # ---------------------------------
 # Retryable internal call
 # ---------------------------------
 
-@llm_retry
-def _call_llm(messages: list, max_tokens: int) -> str:
-    """Single LLM call with retry — used for all three summarization phases."""
-    response = client.chat.completions.create(
-        model=SUMMARIZER_MODEL,
-        messages=messages,
-        max_tokens=max_tokens,
-        temperature=0
-    )
-    return response.choices[0].message.content
+async def _call_llm(messages: list, max_tokens: int) -> str:
+    """Single async LLM call with retry."""
+    async def _invoke():
+        response = await client.chat.completions.create(
+            model=SUMMARIZER_MODEL,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0
+        )
+        return response.choices[0].message.content
+
+    return await async_llm_retry(_invoke)
 
 
 # ---------------------------------
-# Tool
+# Summarizer
 # ---------------------------------
 
-@tool
-def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
+async def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
     """
     Summarize arbitrarily large text using Map-Reduce.
 
@@ -36,7 +36,6 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
     summarizes each chunk independently (MAP), then combines
     all chunk summaries into a final summary (REDUCE).
 
-    Use whenever text length may exceed ~6000 tokens.
     Works for: PDF content, audio transcripts, YouTube transcripts,
     webpage content, or any large block of text.
 
@@ -50,8 +49,7 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
         # Short enough — summarize directly in one shot
         # -------------------------------------------------------
         if len(text) <= CHAR_LIMIT:
-
-            summary = _call_llm(
+            summary = await _call_llm(
                 messages=[
                     {
                         "role": "system",
@@ -67,7 +65,6 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
                 ],
                 max_tokens=800
             )
-
             return {
                 "success": True,
                 "strategy": "direct",
@@ -82,13 +79,12 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
             chunk_size=CHAR_LIMIT,
             chunk_overlap=800
         )
-
         chunks = splitter.split_text(text)
-        chunk_summaries = []
 
-        for i, chunk in enumerate(chunks):
-
-            summary = _call_llm(
+        # MAP — all chunks summarized concurrently
+        import asyncio
+        map_tasks = [
+            _call_llm(
                 messages=[
                     {
                         "role": "system",
@@ -108,8 +104,10 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
                 ],
                 max_tokens=600
             )
+            for i, chunk in enumerate(chunks)
+        ]
 
-            chunk_summaries.append(summary)
+        chunk_summaries = await asyncio.gather(*map_tasks)
 
         # -------------------------------------------------------
         # REDUCE phase: combine chunk summaries into final summary
@@ -119,7 +117,7 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
             for i, s in enumerate(chunk_summaries)
         )
 
-        final_summary = _call_llm(
+        final_summary = await _call_llm(
             messages=[
                 {
                     "role": "system",
@@ -147,7 +145,7 @@ def map_reduce_summarizer(text: str, source_type: str = "document") -> dict:
             "success": True,
             "strategy": "map_reduce",
             "num_chunks": len(chunks),
-            "chunk_summaries": chunk_summaries,
+            "chunk_summaries": list(chunk_summaries),
             "summary": final_summary
         }
 

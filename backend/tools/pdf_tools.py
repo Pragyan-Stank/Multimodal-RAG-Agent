@@ -1,47 +1,32 @@
-from backend.config import get_embeddings,PROJECT_ROOT
 import re
+import asyncio
 from pathlib import Path
-from langchain.tools import tool
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from backend.config import PROJECT_ROOT, get_embeddings
 
-@tool
-def pdf_parser(file_path: str) -> dict:
-    """
-    Parse PDF and extract full text + URLs.
-    """
 
+async def pdf_parser(file_path: str) -> dict:
+    """Parse PDF and extract full text + URLs."""
     try:
         path = Path(file_path)
-
         if not path.is_absolute():
             path = PROJECT_ROOT / path
-
         path = path.resolve()
 
         if not path.exists():
-            return {
-                "success": False,
-                "error": f"PDF not found: {path}"
-            }
+            return {"success": False, "error": f"PDF not found: {path}"}
 
-        loader = PyPDFLoader(str(path))
-        docs = loader.load()
+        # PDF parsing is CPU/IO bound — offload to thread
+        def _parse():
+            loader = PyPDFLoader(str(path))
+            docs = loader.load()
+            full_text = "\n\n".join(doc.page_content for doc in docs)
+            urls = list(set(re.findall(r"https?://[^\s<>\"]+", full_text)))
+            return docs, full_text, urls
 
-        full_text = "\n\n".join(
-            doc.page_content
-            for doc in docs
-        )
-
-        urls = list(
-            set(
-                re.findall(
-                    r"https?://[^\s<>\"]+",
-                    full_text
-                )
-            )
-        )
+        docs, full_text, urls = await asyncio.to_thread(_parse)
 
         return {
             "success": True,
@@ -52,57 +37,36 @@ def pdf_parser(file_path: str) -> dict:
         }
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
-
-
-@tool
-def document_retriever(
+async def document_retriever(
     document_content: str,
     query: str,
     k: int = 5
 ) -> dict:
-    """
-    Retrieve relevant chunks from extracted document text.
-    """
-
+    """Retrieve relevant chunks from extracted document text."""
     try:
+        # FAISS indexing is CPU bound — offload to thread
+        def _retrieve():
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200
+            )
+            chunks = splitter.create_documents([document_content])
+            vector_store = FAISS.from_documents(chunks, get_embeddings())
+            retriever = vector_store.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": k}
+            )
+            return retriever.invoke(query)
 
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
-        )
-
-        chunks = splitter.create_documents(
-            [document_content]
-        )
-
-        vector_store = FAISS.from_documents(
-            chunks,
-            get_embeddings()
-        )
-
-        retriever = vector_store.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": k}
-        )
-
-        docs = retriever.invoke(query)
+        docs = await asyncio.to_thread(_retrieve)
 
         return {
             "success": True,
-            "retrieved_context": [
-                doc.page_content
-                for doc in docs
-            ]
+            "retrieved_context": [doc.page_content for doc in docs]
         }
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}

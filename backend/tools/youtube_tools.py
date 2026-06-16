@@ -1,38 +1,36 @@
 from urllib.parse import urlparse, parse_qs
-from langchain.tools import tool
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled
-from backend.utils.retry import api_retry
+from backend.utils.retry import async_api_retry
+import asyncio
 
 
 # ---------------------------------
 # Retryable internal calls
 # ---------------------------------
 
-@api_retry
-def _list_transcripts(ytt_api: YouTubeTranscriptApi, video_id: str):
-    """List available transcripts with retry."""
-    return ytt_api.list(video_id)
+async def _list_transcripts(ytt_api: YouTubeTranscriptApi, video_id: str):
+    """List transcripts — offloaded to thread with retry."""
+    async def _invoke():
+        return await asyncio.to_thread(ytt_api.list, video_id)
+    return await async_api_retry(_invoke)
 
 
-@api_retry
-def _fetch_transcript(selected):
-    """Fetch selected transcript with retry."""
-    return selected.fetch()
+async def _fetch_transcript(selected):
+    """Fetch selected transcript — offloaded to thread with retry."""
+    async def _invoke():
+        return await asyncio.to_thread(selected.fetch)
+    return await async_api_retry(_invoke)
 
 
 # ---------------------------------
-# Tool
+# Function
 # ---------------------------------
 
-@tool
-def youtube_transcript_tool(video_id: str) -> dict:
-    """
-    Fetch transcript from a YouTube video.
-    """
+async def youtube_transcript_tool(video_id: str) -> dict:
+    """Fetch transcript from a YouTube video."""
     try:
         ytt_api = YouTubeTranscriptApi()
-
-        transcript_list = _list_transcripts(ytt_api, video_id)
+        transcript_list = await _list_transcripts(ytt_api, video_id)
 
         selected = None
         for transcript in transcript_list:
@@ -43,7 +41,7 @@ def youtube_transcript_tool(video_id: str) -> dict:
         if not selected:
             selected = next(iter(transcript_list))
 
-        fetched = _fetch_transcript(selected)
+        fetched = await _fetch_transcript(selected)
 
         transcript_text = " ".join(
             item["text"]
@@ -58,22 +56,17 @@ def youtube_transcript_tool(video_id: str) -> dict:
         }
 
     except TranscriptsDisabled:
-        # Permanent failure — no captions exist, retrying won't help
         return {
             "success": False,
             "error": "No captions available for this video"
         }
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 def extract_video_id(url: str) -> str | None:
     if "youtu.be" in url:
         return url.split("/")[-1].split("?")[0]
-
     parsed = urlparse(url)
     return parse_qs(parsed.query).get("v", [None])[0]

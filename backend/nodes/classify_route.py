@@ -1,23 +1,22 @@
 from pathlib import Path
 
 
-def classify_and_route(state: dict) -> dict:
+async def classify_and_route(state: dict) -> dict:
     """
     Classifies uploaded files and resets per-turn working state.
     extracted_contents and urls_found are cleared each turn so stale
     results from previous turns don't leak into the current generation.
-    
+
     NOTE: This is intentional — extracted_contents is ephemeral working
     state, not conversation history. When you add a DB later, persist
     final_answer + query into the DB from generate_node, not extracted_contents.
     """
-
     result = {
         "pdf_files": [],
         "audio_files": [],
         "image_files": [],
-        "extracted_contents": {"files": {}},  
-        "urls_found": [],                      
+        "extracted_contents": {"files": {}},
+        "urls_found": [],
     }
 
     for file in state.get("uploaded_files", []):

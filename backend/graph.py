@@ -1,24 +1,17 @@
 from langgraph.graph import StateGraph, START, END
-from langgraph.types import Send
 from backend.state import AgentState
 from backend.nodes.planner import planner_node
 from backend.nodes.executor_worker import executor_worker_node
 from backend.nodes.url_router import url_router_node, should_process_urls
 from backend.nodes.clarification import clarification_node
 from backend.nodes.generator import generate_node
-import sqlite3
-from pathlib import Path
-from backend import config as app_config
 from backend.nodes.classify_route import classify_and_route
-from langgraph.checkpoint.sqlite import SqliteSaver
 from backend.nodes.fanout import route_to_workers
 from backend.nodes.give_up import give_up_node
 
 
 builder = StateGraph(AgentState)
-# ---------------------------------
-# Nodes
-# ---------------------------------
+
 builder.add_node("classify_files", classify_and_route)
 builder.add_node("planner", planner_node)
 builder.add_node("clarification", clarification_node)
@@ -27,9 +20,6 @@ builder.add_node("url_router", url_router_node)
 builder.add_node("generate", generate_node)
 builder.add_node("give_up", give_up_node)
 
-# ---------------------------------
-# Edges
-# ---------------------------------
 builder.add_edge(START, "classify_files")
 builder.add_edge("classify_files", "planner")
 
@@ -51,12 +41,5 @@ builder.add_edge("url_router", "generate")
 builder.add_edge("give_up", END)
 builder.add_edge("generate", END)
 
-
-db_path = app_config.PROJECT_ROOT / "checkpoints.db"
-conn = sqlite3.connect(db_path, check_same_thread=False)
-checkpointer = SqliteSaver(conn)
-graph = builder.compile(
-    checkpointer=checkpointer,
-    interrupt_before=["clarification"]
-)
-
+# compiled without checkpointer — injected at runtime via lifespan
+graph_builder = builder

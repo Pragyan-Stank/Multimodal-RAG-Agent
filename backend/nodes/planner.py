@@ -3,8 +3,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from backend.state import AgentState, PlannerDecision
 from backend.prompts import PLANNER_SYSTEM_PROMPT
 from backend.config import PLANNER_MODEL
-from backend.utils.retry import llm_retry
-
+from backend.utils.retry import async_llm_retry
 
 llm = ChatGroq(model=PLANNER_MODEL)
 planner_llm = llm.with_structured_output(PlannerDecision, method="json_mode")
@@ -16,17 +15,16 @@ MAX_CLARIFICATION_ATTEMPTS = 3
 # Retryable internal call
 # ---------------------------------
 
-@llm_retry
-def _call_planner(messages: list) -> PlannerDecision:
-    """Planner LLM call with retry."""
-    return planner_llm.invoke(messages)
+async def _call_planner(messages: list) -> PlannerDecision:
+    """Async planner LLM call with retry."""
+    return await async_llm_retry(planner_llm.ainvoke, messages)
 
 
 # ---------------------------------
 # Node
 # ---------------------------------
 
-def planner_node(state: AgentState):
+async def planner_node(state: AgentState):
 
     messages = [
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
@@ -47,7 +45,7 @@ def planner_node(state: AgentState):
         )
     ]
 
-    decision = _call_planner(messages)
+    decision = await _call_planner(messages)
 
     return {
         "query": state["query"],

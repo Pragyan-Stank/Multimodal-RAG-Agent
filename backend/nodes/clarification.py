@@ -1,10 +1,10 @@
 from backend.state import AgentState
 from langgraph.types import interrupt
 
-def clarification_node(state: AgentState):
-    
+
+async def clarification_node(state: AgentState):
     user_response = interrupt({
-        "question":state["clarification_question"]
+        "question": state["clarification_question"]
     })
 
     return {
