@@ -3,6 +3,14 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
 import operator
 
+def merge_extracted_contents(old: dict, new: dict) -> dict:
+    if new and new.get("clear"):
+        return {"files": {}}
+    old_files = old.get("files", {}) if old else {}
+    new_files = new.get("files", {}) if new else {}
+    return {"files": {**old_files, **new_files}}
+
+
 class AgentState(TypedDict):
     query: str
     uploaded_files: list[str]
@@ -15,9 +23,7 @@ class AgentState(TypedDict):
     clarification_question: str
     clarification_attempts: int
     awaiting_clarification: bool
-    extracted_contents: Annotated[dict, lambda old, new: {
-    "files": {**old.get("files", {}), **new.get("files", {})}
-    }]
+    extracted_contents: Annotated[dict, merge_extracted_contents]
     urls_found: Annotated[list[str], lambda old, new: list(set(new))]
     youtube_urls: list[str]
     web_urls: list[str]

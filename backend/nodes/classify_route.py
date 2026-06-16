@@ -15,7 +15,7 @@ async def classify_and_route(state: dict) -> dict:
         "pdf_files": [],
         "audio_files": [],
         "image_files": [],
-        "extracted_contents": {"files": {}},
+        "extracted_contents": {"files": {}, "clear": True},
         "urls_found": [],
     }
 
