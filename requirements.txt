@@ -45,3 +45,7 @@ tenacity
 pydantic-settings
 
 aiosqlite
+
+psycopg2-binary 
+asyncpg 
+langgraph-checkpoint-postgres
