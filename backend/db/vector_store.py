@@ -1,17 +1,21 @@
 import hashlib
 import asyncio
-from typing import List
 from backend.db.connection import get_pool
 from backend.config import get_embeddings, TEST_USER_ID
+from backend.db.cache import is_document_indexed, mark_document_indexed
 
 
 def _hash_file(content: str) -> str:
-    """Deterministic hash of document content."""
     return hashlib.sha256(content.encode()).hexdigest()
 
 
 async def document_exists(file_hash: str, user_id: str = TEST_USER_ID) -> bool:
-    """Check if document chunks already exist in DB for this user."""
+    """Redis-first check, falls back to Postgres."""
+    # Fast path — Redis
+    if await is_document_indexed(file_hash, user_id):
+        return True
+
+    # Slow path — Postgres (also warms Redis for next time)
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -22,7 +26,13 @@ async def document_exists(file_hash: str, user_id: str = TEST_USER_ID) -> bool:
             """,
             file_hash, user_id
         )
-    return row is not None
+    exists = row is not None
+
+    # Warm Redis so next check is fast
+    if exists:
+        await mark_document_indexed(file_hash, user_id)
+
+    return exists
 
 
 async def store_document_chunks(
@@ -32,18 +42,11 @@ async def store_document_chunks(
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
 ) -> str:
-    """
-    Chunk, embed, and store document content in pgvector.
-    Returns file_hash for later retrieval.
-    Skips if already stored (idempotent).
-    """
     file_hash = _hash_file(content)
 
-    # Idempotency check — don't re-embed if already stored
     if await document_exists(file_hash, user_id):
         return file_hash
 
-    # Chunking — done in thread since it's CPU bound
     def _chunk(text: str) -> list[str]:
         from langchain_text_splitters import RecursiveCharacterTextSplitter
         splitter = RecursiveCharacterTextSplitter(
@@ -54,14 +57,11 @@ async def store_document_chunks(
 
     chunks = await asyncio.to_thread(_chunk, content)
 
-    # Embed all chunks in thread (CPU bound)
     def _embed(texts: list[str]) -> list[list[float]]:
-        embeddings = get_embeddings()
-        return embeddings.embed_documents(texts)
+        return get_embeddings().embed_documents(texts)
 
     vectors = await asyncio.to_thread(_embed, chunks)
 
-    # Batch insert into Neon
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.executemany(
@@ -77,6 +77,9 @@ async def store_document_chunks(
             ]
         )
 
+    # Mark indexed in Redis after successful Postgres insert
+    await mark_document_indexed(file_hash, user_id)
+
     return file_hash
 
 
@@ -86,10 +89,6 @@ async def retrieve_similar_chunks(
     user_id: str = TEST_USER_ID,
     k: int = 5,
 ) -> list[str]:
-    """
-    Embed query and retrieve top-k similar chunks from pgvector.
-    Scoped to specific document and user.
-    """
     def _embed_query(text: str) -> list[float]:
         return get_embeddings().embed_query(text)
 
