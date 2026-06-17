@@ -12,10 +12,6 @@ def find_env_file() -> Path | str:
     return ".env"
 
 
-# ---------------------------------
-# Settings schema with validation
-# ---------------------------------
-
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=find_env_file(),
@@ -26,8 +22,9 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str
     TAVILY_API_KEY: str
     HF_TOKEN: str
-    LANGCHAIN_API_KEY: str = ""           # optional — tracing only
-    LANGSMITH_ENDPOINT: str = ""          # optional
+    LANGCHAIN_API_KEY: str = ""
+    LANGSMITH_ENDPOINT: str = ""
+    NEON_DATABASE_URL: str = ""
 
     @model_validator(mode="after")
     def check_required_keys(self):
@@ -35,6 +32,7 @@ class Settings(BaseSettings):
             "GROQ_API_KEY": self.GROQ_API_KEY,
             "TAVILY_API_KEY": self.TAVILY_API_KEY,
             "HF_TOKEN": self.HF_TOKEN,
+            "NEON_DATABASE_URL": self.NEON_DATABASE_URL,
         }
         missing = [k for k, v in required.items() if not v or v == "None"]
         if missing:
@@ -45,16 +43,11 @@ class Settings(BaseSettings):
         return self
 
 
-# Instantiate once — crashes immediately at startup if keys are missing
 try:
     settings = Settings()
 except Exception as e:
     raise SystemExit(e)
 
-
-# ---------------------------------
-# Inject into environment for LangChain/Groq SDKs
-# ---------------------------------
 
 import os
 os.environ["GROQ_API_KEY"] = settings.GROQ_API_KEY
@@ -63,16 +56,16 @@ os.environ["HF_TOKEN"] = settings.HF_TOKEN
 os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
 os.environ["LANGSMITH_ENDPOINT"] = settings.LANGSMITH_ENDPOINT
 os.environ["LANGCHAIN_TRACING_V2"] = "true" if settings.LANGCHAIN_API_KEY else "false"
-os.environ["LANGSMITH_PROJECT"] = "Multimodal agent trace4"
+os.environ["LANGSMITH_PROJECT"] = "Multimodal agent trace5"
 
 
 # ---------------------------------
 # Models
 # ---------------------------------
 
-PLANNER_MODEL = "llama-3.3-70b-versatile"
+PLANNER_MODEL = "llama-3.1-8b-instant"
 GENERATOR_MODEL = "llama-3.3-70b-versatile"
-INTENT_CLASSIFIER_MODEL = "llama-3.3-70b-versatile"
+INTENT_CLASSIFIER_MODEL = "llama-3.1-8b-instant"
 SUMMARIZER_MODEL = "llama-3.3-70b-versatile"
 AUDIO_MODEL = "whisper-large-v3-turbo"
 VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -90,7 +83,7 @@ MAX_WORKERS = 4
 # Summarizer limits
 # ---------------------------------
 
-SUMMARIZER_TOKEN_LIMIT = 6000
+SUMMARIZER_TOKEN_LIMIT = 5000
 CHARS_PER_TOKEN = 4
 CHAR_LIMIT = SUMMARIZER_TOKEN_LIMIT * CHARS_PER_TOKEN
 
@@ -113,6 +106,20 @@ def get_embeddings():
 
 
 # ---------------------------------
+# Embedding dimension
+# ---------------------------------
+
+EMBEDDING_DIMENSION = 384
+
+
+# ---------------------------------
+# Test user (replace with real auth later)
+# ---------------------------------
+
+TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
+
+
+# ---------------------------------
 # Path resolution
 # ---------------------------------
 
@@ -121,3 +128,16 @@ if "__file__" in globals():
 else:
     cwd = Path.cwd()
     PROJECT_ROOT = cwd.parent if cwd.name == "notebooks" else cwd
+
+# ---------------------------------
+# Neon connection URL (asyncpg format)
+# ---------------------------------
+
+NEON_DATABASE_URL = settings.NEON_DATABASE_URL
+
+# asyncpg requires postgresql+asyncpg:// scheme
+NEON_ASYNC_URL = NEON_DATABASE_URL.replace(
+    "postgresql://", "postgresql+asyncpg://"
+).replace(
+    "postgres://", "postgresql+asyncpg://"
+)

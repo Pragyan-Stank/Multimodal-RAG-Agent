@@ -70,6 +70,7 @@ async def executor_worker_node(state: dict) -> dict:
             elif operation == "retrieve":
                 retrieval_result = await document_retriever(
                     document_content=pdf_result["content"],
+                    file_name=pdf_result["file_name"],
                     query=action.get("query") or query
                 )
 

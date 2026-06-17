@@ -1,39 +1,48 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from backend.api.routes import chat, upload
 from backend import config as app_config
+from backend.db.connection import init_pool, close_pool
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    # Init DB connection pool
+    print("[startup] Connecting to Neon...")
+    await init_pool()
+    print("[startup] DB pool ready.")
 
     # Warm up embeddings
     print("[startup] Loading embedding model...")
     app_config.get_embeddings()
     print("[startup] Embeddings ready.")
 
-    # Initialize async checkpointer and compile graph
+    # Initialize Postgres checkpointer and compile graph
     print("[startup] Initializing checkpointer...")
-    db_path = app_config.PROJECT_ROOT / "checkpoints.db"
 
-    async with AsyncSqliteSaver.from_conn_string(str(db_path)) as checkpointer:
+    async with AsyncPostgresSaver.from_conn_string(
+        app_config.NEON_DATABASE_URL
+    ) as checkpointer:
+        await checkpointer.setup()  # creates langgraph checkpoint tables if not exist
+
         from backend.graph import graph_builder
-        from backend.nodes.clarification import clarification_node
 
         compiled = graph_builder.compile(
             checkpointer=checkpointer,
             interrupt_before=["clarification"]
         )
 
-        # Make compiled graph available to routes
         app.state.graph = compiled
         print("[startup] Graph compiled and ready.")
 
-        yield  # app runs here
+        yield
 
+    # Cleanup
+    await close_pool()
     print("[shutdown] Cleaning up...")
 
 
