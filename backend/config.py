@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: str = ""
     LANGSMITH_ENDPOINT: str = ""
     NEON_DATABASE_URL: str = ""
-
+    UPSTASH_REDIS_REST_URL: str = ""
+    UPSTASH_REDIS_REST_TOKEN: str = ""
+    
     @model_validator(mode="after")
     def check_required_keys(self):
         required = {
@@ -33,6 +35,8 @@ class Settings(BaseSettings):
             "TAVILY_API_KEY": self.TAVILY_API_KEY,
             "HF_TOKEN": self.HF_TOKEN,
             "NEON_DATABASE_URL": self.NEON_DATABASE_URL,
+            "UPSTASH_REDIS_REST_URL": self.UPSTASH_REDIS_REST_URL,
+            "UPSTASH_REDIS_REST_TOKEN": self.UPSTASH_REDIS_REST_TOKEN,
         }
         missing = [k for k, v in required.items() if not v or v == "None"]
         if missing:
@@ -63,7 +67,7 @@ os.environ["LANGSMITH_PROJECT"] = "Multimodal agent trace5"
 # Models
 # ---------------------------------
 
-PLANNER_MODEL = "llama-3.1-8b-instant"
+PLANNER_MODEL = "llama-3.3-70b-versatile"
 GENERATOR_MODEL = "llama-3.3-70b-versatile"
 INTENT_CLASSIFIER_MODEL = "llama-3.1-8b-instant"
 SUMMARIZER_MODEL = "llama-3.3-70b-versatile"
@@ -141,3 +145,6 @@ NEON_ASYNC_URL = NEON_DATABASE_URL.replace(
 ).replace(
     "postgres://", "postgresql+asyncpg://"
 )
+
+UPSTASH_REDIS_REST_URL = settings.UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN = settings.UPSTASH_REDIS_REST_TOKEN

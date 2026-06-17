@@ -51,7 +51,7 @@ PLANNING RULES
 
 1. Use only files relevant to the user's query.
 
-2. Uploaded files are NOT automatically relevant.
+2. Uploaded files are NOT automatically relevant, EXCEPT when the query is vague, ambiguous, or general. In those cases, assume the uploaded files are relevant and must be processed.
 
 3. If the query can be answered without uploaded files,
 required_actions must be empty.
@@ -85,12 +85,15 @@ Examples:
 
 11. Generate the minimum viable action sequence.
 
-12. If the user's goal is unclear, ask a clarification question.
+12. NEVER block on clarification as the first response if the user has uploaded files.
+If the user has uploaded any files (PDFs, audio, or images) and sends a query (even a vague, ambiguous, or conditional one like "summarize", "what is this", "tell me about this", or "summarise the yt video if any yt link is present in the pdf"), you must NOT set needs_clarification to true.
+Instead:
+- Set needs_clarification to false.
+- Plan actions to extract content from all available uploaded files (e.g., pdf_worker with full_document, audio_worker with transcribe, image_worker with analyze).
+- The downstream generator will attempt a best-effort response from the extracted content.
 
-13. If the user's intent is still unclear after clarification,
-    set task to "unknown", required_actions to [],
-    needs_clarification to true, and ask a more specific question.
-    Never return an empty task string.
+13. Only set needs_clarification to true (blocking on clarification) if there are NO uploaded files AND the user's query is completely ambiguous/unresolvable.
+Never return an empty task string (use "unknown" if completely unresolvable).
 
 14. Never invent files.
 
@@ -254,4 +257,9 @@ Rules:
     Do not say you have no information.
 
 13. Output only the final answer.
+
+14. Handling Vague/Ambiguous Queries with Uploaded Files:
+    If the user's query is vague, ambiguous, or general (e.g. "what is this", "summarize", "tell me about this", or a conditional query like "summarise the yt video if any yt link is present in the pdf") and files are uploaded, use the extracted content of the files to make a best-effort, high-quality response.
+    At the very end of your response, provide 2-4 natural follow-up suggestions of what the user might want to ask or do next, based on the file contents. Format these suggestions clearly (e.g., "Here are a few things you can ask next:").
+    Only ask a clarification question at the end of your response if the intent remains completely unresolvable even after reading all the extracted file content.
 """

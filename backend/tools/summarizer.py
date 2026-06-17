@@ -2,6 +2,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from groq import AsyncGroq
 from backend.config import CHAR_LIMIT, SUMMARIZER_MODEL
 from backend.utils.retry import async_llm_retry
+from backend.db.cache import get_cached_llm_response, set_cached_llm_response
 
 client = AsyncGroq()
 
@@ -11,7 +12,13 @@ client = AsyncGroq()
 # ---------------------------------
 
 async def _call_llm(messages: list, max_tokens: int) -> str:
-    """Single async LLM call with retry."""
+    # Build cache key from the user message content only
+    prompt = messages[-1]["content"]
+
+    cached = await get_cached_llm_response(prompt)
+    if cached:
+        return cached
+
     async def _invoke():
         response = await client.chat.completions.create(
             model=SUMMARIZER_MODEL,
@@ -21,7 +28,9 @@ async def _call_llm(messages: list, max_tokens: int) -> str:
         )
         return response.choices[0].message.content
 
-    return await async_llm_retry(_invoke)
+    result = await async_llm_retry(_invoke)
+    await set_cached_llm_response(prompt, result)
+    return result
 
 
 # ---------------------------------

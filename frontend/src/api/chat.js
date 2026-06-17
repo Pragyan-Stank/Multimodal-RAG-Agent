@@ -43,9 +43,10 @@ export async function sendMessage({ query, file_paths = [], thread_id = null }) 
  */
 export async function streamMessage(
   { query, file_paths = [], thread_id = null },
-  { onToken, onStatus, onDone, onError, onClarification }
+  { onToken, onStatus, onDone, onError, onClarification },
+  endpoint = "http://localhost:8000/api/v1/chat/stream"
 ) {
-  const response = await fetch("http://localhost:8000/api/v1/chat/stream", {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, file_paths, thread_id }),
@@ -102,4 +103,19 @@ export async function streamMessage(
       }
     }
   }
+}
+
+
+/**
+ * Resume an interrupted graph with clarification answer.
+ */
+export async function streamClarification(
+  { query, thread_id },
+  callbacks
+) {
+  return streamMessage(
+    { query, file_paths: [], thread_id },
+    callbacks,
+    "http://localhost:8000/api/v1/chat/clarify"
+  );
 }

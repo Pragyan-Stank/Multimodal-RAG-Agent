@@ -3,8 +3,9 @@ import { v4 as uuidv4 } from "uuid";
 import Sidebar from "../components/Sidebar";
 import MessageList from "../components/MessageList";
 import InputBar from "../components/InputBar";
+import ClarificationBar from "../components/ClarificationBar";
 import { useChat } from "../context/ChatContext";
-import { uploadFiles, streamMessage } from "../api/chat";
+import { uploadFiles, streamMessage, streamClarification } from "../api/chat";
 
 export default function Chat() {
   const {
@@ -16,24 +17,73 @@ export default function Chat() {
     updateLastAssistantMessage,
     setThreadId,
     setIsStreaming,
+    pendingClarification,
+    setPendingClarification,
   } = useChat();
 
   const [uploadedFilePaths, setUploadedFilePaths] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [statusLabel, setStatusLabel] = useState("");
-
-  // Ref to accumulate streamed tokens without stale-closure issues
   const streamedTextRef = useRef("");
+
+  // Shared SSE callbacks builder
+  function buildCallbacks(convId) {
+    return {
+      onToken: (payload) => {
+        streamedTextRef.current += payload.content;
+        updateLastAssistantMessage(convId, streamedTextRef.current);
+      },
+      onStatus: (payload) => {
+        setStatusLabel(payload.message || "");
+      },
+      onDone: (payload) => {
+        if (payload.thread_id) {
+          setThreadId(convId, payload.thread_id);
+        }
+        setPendingClarification(null);
+        setIsStreaming(false);
+        setStatusLabel("");
+      },
+      onError: (payload) => {
+        updateLastAssistantMessage(convId, "");
+        addMessage(convId, {
+          id: uuidv4(),
+          role: "error",
+          content: payload.message || "Failed to get a response.",
+          timestamp: new Date().toISOString(),
+        });
+        setPendingClarification(null);
+        setIsStreaming(false);
+        setStatusLabel("");
+      },
+      onClarification: (payload) => {
+        if (payload.thread_id) {
+          setThreadId(convId, payload.thread_id);
+        }
+        // Show question as assistant message
+        updateLastAssistantMessage(
+          convId,
+          payload.message || "I need more information to proceed."
+        );
+        // Store pending clarification state — switches InputBar to ClarificationBar
+        setPendingClarification({
+          threadId: payload.thread_id || activeConversation?.threadId,
+          question: payload.message,
+          conversationId: convId,
+        });
+        setIsStreaming(false);
+        setStatusLabel("");
+      },
+    };
+  }
 
   const handleSend = useCallback(
     async (text, files) => {
-      // Ensure we have an active conversation
       let convId = activeConversationId;
       if (!convId) {
         convId = createConversation();
       }
 
-      // Upload files first if any
       let filePaths = [...uploadedFilePaths];
       let fileNames = [];
 
@@ -44,14 +94,10 @@ export default function Chat() {
           filePaths = [...filePaths, ...uploadResult.file_paths];
           fileNames = files.map((f) => f.name);
         } catch (err) {
-          // Add error message
           addMessage(convId, {
             id: uuidv4(),
             role: "error",
-            content:
-              err.response?.data?.detail ||
-              err.message ||
-              "Failed to upload files.",
+            content: err.response?.data?.detail || err.message || "Failed to upload files.",
             timestamp: new Date().toISOString(),
           });
           setIsUploading(false);
@@ -60,32 +106,24 @@ export default function Chat() {
         setIsUploading(false);
       }
 
-      // Add user message
-      const userMessage = {
+      addMessage(convId, {
         id: uuidv4(),
         role: "user",
         content: text,
         files: fileNames,
         timestamp: new Date().toISOString(),
-      };
-      addMessage(convId, userMessage);
+      });
 
-      // Clear uploaded file paths
       setUploadedFilePaths([]);
 
-      // Add placeholder assistant message
-      const assistantMessageId = uuidv4();
       addMessage(convId, {
-        id: assistantMessageId,
+        id: uuidv4(),
         role: "assistant",
         content: "",
         timestamp: new Date().toISOString(),
       });
 
-      // Reset streamed text accumulator
       streamedTextRef.current = "";
-
-      // Stream from API via SSE
       setIsStreaming(true);
       setStatusLabel("");
 
@@ -96,77 +134,72 @@ export default function Chat() {
             file_paths: filePaths,
             thread_id: activeConversation?.threadId || null,
           },
-          {
-            onToken: (payload) => {
-              streamedTextRef.current += payload.content;
-              updateLastAssistantMessage(convId, streamedTextRef.current);
-            },
-            onStatus: (payload) => {
-              setStatusLabel(payload.message || "");
-            },
-            onDone: (payload) => {
-              if (payload.thread_id) {
-                setThreadId(convId, payload.thread_id);
-              }
-              setIsStreaming(false);
-              setStatusLabel("");
-            },
-            onError: (payload) => {
-              // Replace the empty/partial assistant message with error
-              updateLastAssistantMessage(convId, "");
-              addMessage(convId, {
-                id: uuidv4(),
-                role: "error",
-                content:
-                  payload.message || "Failed to get a response. Please try again.",
-                timestamp: new Date().toISOString(),
-              });
-              setIsStreaming(false);
-              setStatusLabel("");
-            },
-            onClarification: (payload) => {
-              // Show clarification question as assistant message, re-enable input
-              updateLastAssistantMessage(
-                convId,
-                payload.message || "I need more information to proceed."
-              );
-              setIsStreaming(false);
-              setStatusLabel("");
-            },
-          }
+          buildCallbacks(convId)
         );
       } catch (err) {
-        // Network-level error (fetch itself failed)
         updateLastAssistantMessage(convId, "");
         addMessage(convId, {
           id: uuidv4(),
           role: "error",
-          content: err.message || "Failed to get a response. Please try again.",
+          content: err.message || "Failed to get a response.",
           timestamp: new Date().toISOString(),
         });
         setIsStreaming(false);
         setStatusLabel("");
       }
     },
-    [
-      activeConversationId,
-      activeConversation,
-      uploadedFilePaths,
-      createConversation,
-      addMessage,
-      updateLastAssistantMessage,
-      setThreadId,
-      setIsStreaming,
-    ]
+    [activeConversationId, activeConversation, uploadedFilePaths]
   );
 
-  const chatTitle = activeConversation
-    ? activeConversation.title
-    : "Select a conversation";
+  const handleClarification = useCallback(
+    async (answer) => {
+      if (!pendingClarification) return;
 
-  const messages = activeConversation ? activeConversation.messages : [];
-  // Filter out empty assistant messages — but keep them visible during streaming
-  // so the placeholder shows while tokens arrive
+      const { conversationId, threadId } = pendingClarification;
+
+      // Add user's clarification answer as a message
+      addMessage(conversationId, {
+        id: uuidv4(),
+        role: "user",
+        content: answer,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Add placeholder for assistant response
+      addMessage(conversationId, {
+        id: uuidv4(),
+        role: "assistant",
+        content: "",
+        timestamp: new Date().toISOString(),
+      });
+
+      streamedTextRef.current = "";
+      setIsStreaming(true);
+      setStatusLabel("");
+
+      try {
+        await streamClarification(
+          { query: answer, thread_id: threadId },
+          buildCallbacks(conversationId)
+        );
+      } catch (err) {
+        updateLastAssistantMessage(conversationId, "");
+        addMessage(conversationId, {
+          id: uuidv4(),
+          role: "error",
+          content: err.message || "Failed to get a response.",
+          timestamp: new Date().toISOString(),
+        });
+        setPendingClarification(null);
+        setIsStreaming(false);
+        setStatusLabel("");
+      }
+    },
+    [pendingClarification]
+  );
+
+  const chatTitle = activeConversation?.title || "Select a conversation";
+  const messages = activeConversation?.messages || [];
   const visibleMessages = messages.filter(
     (m) => !(m.role === "assistant" && m.content === "" && !isStreaming)
   );
@@ -174,9 +207,7 @@ export default function Chat() {
   return (
     <div className="flex h-screen bg-[var(--background)]">
       <Sidebar />
-
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
         <div className="px-8 py-5 border-b border-[var(--border-light)]">
           <h2
             className="text-lg font-bold truncate"
@@ -186,15 +217,22 @@ export default function Chat() {
           </h2>
         </div>
 
-        {/* Messages area */}
         <MessageList
           messages={visibleMessages}
           isStreaming={isStreaming}
           statusLabel={statusLabel}
         />
 
-        {/* Input bar */}
-        <InputBar onSend={handleSend} disabled={isStreaming || isUploading} />
+        {/* Show clarification input or normal input */}
+        {pendingClarification ? (
+          <ClarificationBar
+            question={pendingClarification.question}
+            onSubmit={handleClarification}
+            disabled={isStreaming}
+          />
+        ) : (
+          <InputBar onSend={handleSend} disabled={isStreaming || isUploading} />
+        )}
       </div>
     </div>
   );

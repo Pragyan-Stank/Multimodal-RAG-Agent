@@ -3,6 +3,7 @@ import json
 import asyncio
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from langgraph.types import Command
 
 from backend.api.schemas import (
     ChatRequest, ChatResponse,
@@ -135,15 +136,6 @@ async def chat_stream(request: ChatRequest,req:Request):
                             "message": message
                         })
 
-                    # --- clarification interrupt ---
-                    if node_name == "clarification":
-                        question = node_output.get("clarification_question", "")
-                        yield _sse("clarification", {
-                            "node": node_name,
-                            "message": question
-                        })
-                        continue
-
                     # --- stream final answer token by token ---
                     if node_name in ("generate", "give_up"):
                         final_answer = node_output.get("final_answer", "")
@@ -154,8 +146,17 @@ async def chat_stream(request: ChatRequest,req:Request):
                                 yield _sse("token", {"content": chunk})
                                 await asyncio.sleep(0)  # yield control to event loop
 
-            # --- stream complete ---
-            yield _sse("done", {"thread_id": thread_id})
+            # Check if the graph is interrupted at the clarification node
+            state = await graph.aget_state(graph_config)
+            if state.next and "clarification" in state.next:
+                question = state.values.get("clarification_question", "")
+                yield _sse("clarification", {
+                    "node": "clarification",
+                    "message": question,
+                    "thread_id": thread_id
+                })
+            else:
+                yield _sse("done", {"thread_id": thread_id})
 
         except Exception as e:
             yield _sse("error", {"message": str(e)})
@@ -189,3 +190,66 @@ async def reset_chat(request: ResetRequest,req:Request):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.post("/chat/clarify")
+async def chat_clarify(request: ChatRequest, req: Request):
+    """
+    Resume an interrupted graph with user's clarification response.
+    thread_id is required — identifies the interrupted session.
+    query is the user's clarification answer.
+    """
+    if not request.thread_id:
+        raise HTTPException(status_code=400, detail="thread_id required to resume clarification.")
+
+    graph = req.app.state.graph
+    graph_config = build_graph_config(request.thread_id)
+
+    async def event_stream():
+        try:
+            async for event in graph.astream(
+                Command(resume=request.query),
+                config=graph_config,
+                stream_mode="updates"
+            ):
+                for node_name, node_output in event.items():
+                    message = NODE_MESSAGES.get(node_name)
+                    if message:
+                        yield _sse("status", {
+                            "node": node_name,
+                            "message": message
+                        })
+
+                    if node_name in ("generate", "give_up"):
+                        final_answer = node_output.get("final_answer", "")
+                        if final_answer:
+                            words = final_answer.split(" ")
+                            for i, word in enumerate(words):
+                                chunk = word if i == 0 else " " + word
+                                yield _sse("token", {"content": chunk})
+                                await asyncio.sleep(0)
+
+            # Check if the graph is interrupted again at the clarification node
+            state = await graph.aget_state(graph_config)
+            if state.next and "clarification" in state.next:
+                question = state.values.get("clarification_question", "")
+                yield _sse("clarification", {
+                    "node": "clarification",
+                    "message": question,
+                    "thread_id": request.thread_id
+                })
+            else:
+                yield _sse("done", {"thread_id": request.thread_id})
+
+        except Exception as e:
+            yield _sse("error", {"message": str(e)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )

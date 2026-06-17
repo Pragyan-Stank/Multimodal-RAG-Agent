@@ -22,6 +22,8 @@ export function ChatProvider({ children }) {
   const [conversations, setConversations] = useState(() => loadConversations());
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [pendingClarification, setPendingClarification] = useState(null);
+  // Shape: { threadId: string, question: string, conversationId: string } | null
 
   // Persist conversations whenever they change
   useEffect(() => {
@@ -117,6 +119,9 @@ export function ChatProvider({ children }) {
         setThreadId,
         setIsStreaming,
         deleteConversation,
+        pendingClarification,
+        setPendingClarification,
+
       }}
     >
       {children}

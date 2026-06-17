@@ -23,7 +23,8 @@ async def _call_generator(messages: list) -> str:
 # ---------------------------------
 
 async def generate_node(state: AgentState):
-
+    # print(f"[generate] task={state['task']}")
+    # print(f"[generate] extracted_contents={state['extracted_contents']}")
     messages = [
         SystemMessage(content=GENERATE_SYSTEM_PROMPT),
         HumanMessage(
