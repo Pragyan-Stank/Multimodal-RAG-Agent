@@ -11,7 +11,7 @@ export default function Sidebar() {
   } = useChat();
 
   return (
-    <div className="w-[280px] shrink-0 border-r border-[var(--border-light)] h-screen flex flex-col bg-[var(--background)]">
+    <div className="w-[var(--sidebar-width)] shrink-0 border-r border-[var(--border-light)] h-screen flex flex-col bg-[var(--background)]">
       {/* App name */}
       <div className="p-6 pb-4">
         <h1
@@ -26,12 +26,15 @@ export default function Sidebar() {
       <div className="h-px bg-[var(--border-light)]" />
 
       {/* New Chat button */}
-      <div className="p-4">
+      <div className="px-4 pt-4 pb-2">
         <button
           id="new-chat-button"
           onClick={createConversation}
-          className="w-full border border-[var(--border-light)] text-[var(--foreground)] bg-transparent py-2.5 uppercase tracking-widest text-xs font-semibold cursor-pointer hover:bg-[var(--muted)] hover:border-[var(--foreground)] transition-colors duration-100"
-          style={{ fontFamily: '"JetBrains Mono", monospace' }}
+          className="w-full bg-transparent text-[var(--foreground)] border border-[var(--border-light)] py-2.5 uppercase tracking-widest cursor-pointer hover:bg-[var(--foreground)] hover:text-[var(--background)] hover:border-[var(--foreground)] transition-colors duration-100"
+          style={{
+            fontFamily: '"JetBrains Mono", monospace',
+            fontSize: "11px",
+          }}
         >
           + New Chat
         </button>

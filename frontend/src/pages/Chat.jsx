@@ -1,10 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 import Sidebar from "../components/Sidebar";
 import MessageList from "../components/MessageList";
 import InputBar from "../components/InputBar";
 import { useChat } from "../context/ChatContext";
-import { uploadFiles, sendMessage } from "../api/chat";
+import { uploadFiles, streamMessage } from "../api/chat";
 
 export default function Chat() {
   const {
@@ -20,6 +20,10 @@ export default function Chat() {
 
   const [uploadedFilePaths, setUploadedFilePaths] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [statusLabel, setStatusLabel] = useState("");
+
+  // Ref to accumulate streamed tokens without stale-closure issues
+  const streamedTextRef = useRef("");
 
   const handleSend = useCallback(
     async (text, files) => {
@@ -78,39 +82,70 @@ export default function Chat() {
         timestamp: new Date().toISOString(),
       });
 
-      // Send to API
+      // Reset streamed text accumulator
+      streamedTextRef.current = "";
+
+      // Stream from API via SSE
       setIsStreaming(true);
+      setStatusLabel("");
+
       try {
-        const result = await sendMessage({
-          query: text,
-          file_paths: filePaths,
-          thread_id: activeConversation?.threadId || null,
-        });
-
-        // Update assistant message with response
-        updateLastAssistantMessage(convId, result.final_answer);
-
-        // Store thread_id for conversation continuity
-        if (result.thread_id) {
-          setThreadId(convId, result.thread_id);
-        }
-      } catch (err) {
-        // Replace the empty assistant message with an error
-        updateLastAssistantMessage(
-          convId,
-          ""
+        await streamMessage(
+          {
+            query: text,
+            file_paths: filePaths,
+            thread_id: activeConversation?.threadId || null,
+          },
+          {
+            onToken: (payload) => {
+              streamedTextRef.current += payload.content;
+              updateLastAssistantMessage(convId, streamedTextRef.current);
+            },
+            onStatus: (payload) => {
+              setStatusLabel(payload.message || "");
+            },
+            onDone: (payload) => {
+              if (payload.thread_id) {
+                setThreadId(convId, payload.thread_id);
+              }
+              setIsStreaming(false);
+              setStatusLabel("");
+            },
+            onError: (payload) => {
+              // Replace the empty/partial assistant message with error
+              updateLastAssistantMessage(convId, "");
+              addMessage(convId, {
+                id: uuidv4(),
+                role: "error",
+                content:
+                  payload.message || "Failed to get a response. Please try again.",
+                timestamp: new Date().toISOString(),
+              });
+              setIsStreaming(false);
+              setStatusLabel("");
+            },
+            onClarification: (payload) => {
+              // Show clarification question as assistant message, re-enable input
+              updateLastAssistantMessage(
+                convId,
+                payload.message || "I need more information to proceed."
+              );
+              setIsStreaming(false);
+              setStatusLabel("");
+            },
+          }
         );
+      } catch (err) {
+        // Network-level error (fetch itself failed)
+        updateLastAssistantMessage(convId, "");
         addMessage(convId, {
           id: uuidv4(),
           role: "error",
-          content:
-            err.response?.data?.detail ||
-            err.message ||
-            "Failed to get a response. Please try again.",
+          content: err.message || "Failed to get a response. Please try again.",
           timestamp: new Date().toISOString(),
         });
-      } finally {
         setIsStreaming(false);
+        setStatusLabel("");
       }
     },
     [
@@ -130,9 +165,10 @@ export default function Chat() {
     : "Select a conversation";
 
   const messages = activeConversation ? activeConversation.messages : [];
-  // Filter out empty assistant messages (placeholder that was replaced by error)
+  // Filter out empty assistant messages — but keep them visible during streaming
+  // so the placeholder shows while tokens arrive
   const visibleMessages = messages.filter(
-    (m) => !(m.role === "assistant" && m.content === "")
+    (m) => !(m.role === "assistant" && m.content === "" && !isStreaming)
   );
 
   return (
@@ -151,7 +187,11 @@ export default function Chat() {
         </div>
 
         {/* Messages area */}
-        <MessageList messages={visibleMessages} isStreaming={isStreaming} />
+        <MessageList
+          messages={visibleMessages}
+          isStreaming={isStreaming}
+          statusLabel={statusLabel}
+        />
 
         {/* Input bar */}
         <InputBar onSend={handleSend} disabled={isStreaming || isUploading} />

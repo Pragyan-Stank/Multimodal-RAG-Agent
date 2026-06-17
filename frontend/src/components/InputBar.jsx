@@ -47,8 +47,8 @@ export default function InputBar({ onSend, disabled }) {
   }
 
   return (
-    <div className="p-6 bg-[var(--background)]">
-      <div className="max-w-3xl mx-auto border border-[var(--border-light)] focus-within:border-[var(--foreground)] p-4 flex flex-col gap-3">
+    <div className="p-3 sm:p-6 bg-[var(--background)] border-t border-[var(--border-light)]">
+      <div className="max-w-3xl mx-auto p-4 flex flex-col gap-3 focus-within:ring-1 focus-within:ring-[var(--foreground)]">
         {/* File preview row */}
         {files.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-2 border-b border-[var(--border-light)]">
@@ -68,9 +68,10 @@ export default function InputBar({ onSend, disabled }) {
           placeholder="Message Neutron..."
           disabled={disabled}
           rows={1}
-          className="w-full bg-[var(--background)] text-[var(--foreground)] text-base resize-none border-none outline-none placeholder:italic placeholder:text-[var(--muted-foreground)]"
+          className="w-full bg-[var(--background)] text-[var(--foreground)] resize-none border-none outline-none placeholder:text-[var(--muted-foreground)]"
           style={{
-            fontFamily: '"Source Serif 4", Georgia, serif',
+            fontFamily: '"JetBrains Mono", monospace',
+            fontSize: "13px",
             maxHeight: `${6 * 24}px`,
           }}
         />

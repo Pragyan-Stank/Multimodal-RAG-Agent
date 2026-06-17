@@ -9,6 +9,7 @@
   --muted-foreground: #525252;
   --border: #000000;
   --border-light: #E5E5E5;
+  --sidebar-width: 260px;
 }
 
 * {
@@ -18,6 +19,7 @@
 
 body {
   font-family: "Source Serif 4", Georgia, serif;
+  font-size: 15px;
   background: var(--background);
   color: var(--foreground);
   margin: 0;
@@ -30,6 +32,11 @@ body {
 *:focus-visible {
   outline: 3px solid #000;
   outline-offset: 3px;
+}
+
+/* Sidebar conversation item transitions */
+.sidebar-item {
+  transition: background 120ms ease;
 }
 
 /* Scrollbar styling */
@@ -52,9 +59,25 @@ body {
   50% { opacity: 1; }
 }
 
+.streaming-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--foreground);
+  border-radius: 50% !important;
+}
+
 .streaming-dot:nth-child(1) { animation: dotPulse 1.4s ease-in-out infinite; }
 .streaming-dot:nth-child(2) { animation: dotPulse 1.4s ease-in-out 0.2s infinite; }
 .streaming-dot:nth-child(3) { animation: dotPulse 1.4s ease-in-out 0.4s infinite; }
+
+/* Status label for streaming pipeline steps */
+.status-label {
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  color: var(--muted-foreground);
+  opacity: 0.7;
+  margin-top: 6px;
+}
 
 /* Markdown content styling */
 .markdown-content h1,

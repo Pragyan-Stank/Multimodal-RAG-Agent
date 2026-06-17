@@ -18,17 +18,6 @@ export default function ConversationList({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div
-        className="px-6 py-3"
-      >
-        <span
-          className="text-xs tracking-widest text-[var(--muted-foreground)] uppercase"
-          style={{ fontFamily: '"JetBrains Mono", monospace' }}
-        >
-          Conversations
-        </span>
-      </div>
-
       {conversations.map((conv) => {
         const isActive = conv.id === activeConversationId;
         const timestamp = new Date(conv.createdAt).toLocaleDateString([], {
@@ -36,14 +25,22 @@ export default function ConversationList({
           day: "numeric",
         });
 
+        // Get a snippet from the last message if available
+        const lastMessage = conv.messages && conv.messages.length > 0
+          ? conv.messages[conv.messages.length - 1]
+          : null;
+        const snippet = lastMessage?.content
+          ? lastMessage.content.substring(0, 30)
+          : "";
+
         return (
           <button
             key={conv.id}
             onClick={() => onSelect(conv.id)}
-            className={`w-full text-left px-6 py-3.5 cursor-pointer transition-colors duration-100 block ${
+            className={`sidebar-item w-full text-left px-6 py-3 cursor-pointer block ${
               isActive
-                ? "bg-[var(--muted)] text-[var(--foreground)]"
-                : "bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--muted)]"
+                ? "bg-[var(--muted)] text-[var(--foreground)] border-l-2 border-[var(--foreground)]"
+                : "bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--muted)] border-l-2 border-transparent"
             }`}
           >
             <div
@@ -53,10 +50,16 @@ export default function ConversationList({
               {conv.title}
             </div>
             <div
-              className="text-xs mt-1 text-[var(--muted-foreground)]"
+              className="text-xs mt-1 text-[var(--muted-foreground)] truncate flex items-center gap-1"
               style={{ fontFamily: '"JetBrains Mono", monospace' }}
             >
-              {timestamp}
+              <span>{timestamp}</span>
+              {snippet && (
+                <>
+                  <span className="text-[var(--border-light)]">·</span>
+                  <span className="truncate opacity-60">{snippet}</span>
+                </>
+              )}
             </div>
           </button>
         );
