@@ -72,7 +72,7 @@ async def store_document_chunks(
                 ($1, $2, $3, $4, $5::vector, $6)
             """,
             [
-                (file_hash, file_name, i, chunk, str(vectors[i]), user_id)
+                (file_hash, file_name, i, chunk, f"[{','.join(map(str, vectors[i]))}]", user_id)
                 for i, chunk in enumerate(chunks)
             ]
         )
@@ -104,7 +104,7 @@ async def retrieve_similar_chunks(
             ORDER BY embedding <=> $3::vector
             LIMIT $4
             """,
-            file_hash, user_id, str(query_vector), k
+            file_hash, user_id, f"[{','.join(map(str, query_vector))}]", k
         )
 
     return [row["content"] for row in rows]
