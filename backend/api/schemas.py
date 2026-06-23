@@ -1,4 +1,3 @@
-from sympy.core.symbol import Str
 from pydantic import BaseModel, Field 
 from typing import Optional
 
