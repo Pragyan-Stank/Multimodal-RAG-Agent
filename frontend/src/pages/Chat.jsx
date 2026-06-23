@@ -7,6 +7,60 @@ import ClarificationBar from "../components/ClarificationBar";
 import { useChat } from "../context/ChatContext";
 import { uploadFiles, streamMessage, streamClarification } from "../api/chat";
 
+
+// ---------------------------------
+// Outside component — no stale closure risk
+// ---------------------------------
+
+function buildCallbacks(convId, ctx) {
+  return {
+    onToken: (payload) => {
+      ctx.streamedTextRef.current += payload.content;
+      ctx.updateLastAssistantMessage(convId, ctx.streamedTextRef.current);
+    },
+    onStatus: (payload) => {
+      ctx.setStatusLabel(payload.message || "");
+    },
+    onDone: (payload) => {
+      if (payload.thread_id) {
+        ctx.setThreadId(convId, payload.thread_id);
+      }
+      ctx.setPendingClarification(null);
+      ctx.setIsStreaming(false);
+      ctx.setStatusLabel("");
+    },
+    onError: (payload) => {
+      ctx.updateLastAssistantMessage(convId, "");
+      ctx.addMessage(convId, {
+        id: uuidv4(),
+        role: "error",
+        content: payload.message || "Failed to get a response.",
+        timestamp: new Date().toISOString(),
+      });
+      ctx.setPendingClarification(null);
+      ctx.setIsStreaming(false);
+      ctx.setStatusLabel("");
+    },
+    onClarification: (payload) => {
+      if (payload.thread_id) {
+        ctx.setThreadId(convId, payload.thread_id);
+      }
+      ctx.updateLastAssistantMessage(
+        convId,
+        payload.message || "I need more information to proceed."
+      );
+      ctx.setPendingClarification({
+        threadId: payload.thread_id,
+        question: payload.message,
+        conversationId: convId,
+      });
+      ctx.setIsStreaming(false);
+      ctx.setStatusLabel("");
+    },
+  };
+}
+
+
 export default function Chat() {
   const {
     activeConversation,
@@ -26,56 +80,17 @@ export default function Chat() {
   const [statusLabel, setStatusLabel] = useState("");
   const streamedTextRef = useRef("");
 
-  // Shared SSE callbacks builder
-  function buildCallbacks(convId) {
-    return {
-      onToken: (payload) => {
-        streamedTextRef.current += payload.content;
-        updateLastAssistantMessage(convId, streamedTextRef.current);
-      },
-      onStatus: (payload) => {
-        setStatusLabel(payload.message || "");
-      },
-      onDone: (payload) => {
-        if (payload.thread_id) {
-          setThreadId(convId, payload.thread_id);
-        }
-        setPendingClarification(null);
-        setIsStreaming(false);
-        setStatusLabel("");
-      },
-      onError: (payload) => {
-        updateLastAssistantMessage(convId, "");
-        addMessage(convId, {
-          id: uuidv4(),
-          role: "error",
-          content: payload.message || "Failed to get a response.",
-          timestamp: new Date().toISOString(),
-        });
-        setPendingClarification(null);
-        setIsStreaming(false);
-        setStatusLabel("");
-      },
-      onClarification: (payload) => {
-        if (payload.thread_id) {
-          setThreadId(convId, payload.thread_id);
-        }
-        // Show question as assistant message
-        updateLastAssistantMessage(
-          convId,
-          payload.message || "I need more information to proceed."
-        );
-        // Store pending clarification state — switches InputBar to ClarificationBar
-        setPendingClarification({
-          threadId: payload.thread_id || activeConversation?.threadId,
-          question: payload.message,
-          conversationId: convId,
-        });
-        setIsStreaming(false);
-        setStatusLabel("");
-      },
-    };
-  }
+  // contextRef always points to latest values — no stale closures during streaming
+  const contextRef = useRef({});
+  contextRef.current = {
+    updateLastAssistantMessage,
+    addMessage,
+    setThreadId,
+    setIsStreaming,
+    setStatusLabel,
+    setPendingClarification,
+    streamedTextRef,
+  };
 
   const handleSend = useCallback(
     async (text, files) => {
@@ -94,7 +109,7 @@ export default function Chat() {
           filePaths = [...filePaths, ...uploadResult.file_paths];
           fileNames = files.map((f) => f.name);
         } catch (err) {
-          addMessage(convId, {
+          contextRef.current.addMessage(convId, {
             id: uuidv4(),
             role: "error",
             content: err.response?.data?.detail || err.message || "Failed to upload files.",
@@ -106,7 +121,7 @@ export default function Chat() {
         setIsUploading(false);
       }
 
-      addMessage(convId, {
+      contextRef.current.addMessage(convId, {
         id: uuidv4(),
         role: "user",
         content: text,
@@ -116,7 +131,7 @@ export default function Chat() {
 
       setUploadedFilePaths([]);
 
-      addMessage(convId, {
+      contextRef.current.addMessage(convId, {
         id: uuidv4(),
         role: "assistant",
         content: "",
@@ -124,8 +139,8 @@ export default function Chat() {
       });
 
       streamedTextRef.current = "";
-      setIsStreaming(true);
-      setStatusLabel("");
+      contextRef.current.setIsStreaming(true);
+      contextRef.current.setStatusLabel("");
 
       try {
         await streamMessage(
@@ -134,21 +149,21 @@ export default function Chat() {
             file_paths: filePaths,
             thread_id: activeConversation?.threadId || null,
           },
-          buildCallbacks(convId)
+          buildCallbacks(convId, contextRef.current)
         );
       } catch (err) {
-        updateLastAssistantMessage(convId, "");
-        addMessage(convId, {
+        contextRef.current.updateLastAssistantMessage(convId, "");
+        contextRef.current.addMessage(convId, {
           id: uuidv4(),
           role: "error",
           content: err.message || "Failed to get a response.",
           timestamp: new Date().toISOString(),
         });
-        setIsStreaming(false);
-        setStatusLabel("");
+        contextRef.current.setIsStreaming(false);
+        contextRef.current.setStatusLabel("");
       }
     },
-    [activeConversationId, activeConversation, uploadedFilePaths]
+    [activeConversationId, activeConversation?.threadId, uploadedFilePaths, createConversation]
   );
 
   const handleClarification = useCallback(
@@ -157,16 +172,14 @@ export default function Chat() {
 
       const { conversationId, threadId } = pendingClarification;
 
-      // Add user's clarification answer as a message
-      addMessage(conversationId, {
+      contextRef.current.addMessage(conversationId, {
         id: uuidv4(),
         role: "user",
         content: answer,
         timestamp: new Date().toISOString(),
       });
 
-      // Add placeholder for assistant response
-      addMessage(conversationId, {
+      contextRef.current.addMessage(conversationId, {
         id: uuidv4(),
         role: "assistant",
         content: "",
@@ -174,25 +187,25 @@ export default function Chat() {
       });
 
       streamedTextRef.current = "";
-      setIsStreaming(true);
-      setStatusLabel("");
+      contextRef.current.setIsStreaming(true);
+      contextRef.current.setStatusLabel("");
 
       try {
         await streamClarification(
           { query: answer, thread_id: threadId },
-          buildCallbacks(conversationId)
+          buildCallbacks(conversationId, contextRef.current)
         );
       } catch (err) {
-        updateLastAssistantMessage(conversationId, "");
-        addMessage(conversationId, {
+        contextRef.current.updateLastAssistantMessage(conversationId, "");
+        contextRef.current.addMessage(conversationId, {
           id: uuidv4(),
           role: "error",
           content: err.message || "Failed to get a response.",
           timestamp: new Date().toISOString(),
         });
-        setPendingClarification(null);
-        setIsStreaming(false);
-        setStatusLabel("");
+        contextRef.current.setPendingClarification(null);
+        contextRef.current.setIsStreaming(false);
+        contextRef.current.setStatusLabel("");
       }
     },
     [pendingClarification]
@@ -223,7 +236,6 @@ export default function Chat() {
           statusLabel={statusLabel}
         />
 
-        {/* Show clarification input or normal input */}
         {pendingClarification ? (
           <ClarificationBar
             question={pendingClarification.question}
