@@ -44,5 +44,3 @@ builder.add_edge("generate", END)
 # compiled without checkpointer — injected at runtime via lifespan
 graph_builder = builder
 
-from langgraph.checkpoint.memory import MemorySaver
-graph = builder.compile(checkpointer=MemorySaver(), interrupt_before=["clarification"])
