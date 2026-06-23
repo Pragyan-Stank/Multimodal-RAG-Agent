@@ -6,11 +6,15 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from backend.api.routes import chat, upload
 from backend import config as app_config
 from backend.db.connection import init_pool, close_pool
+from backend.api.routes.upload import cleanup_old_uploads
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
+    
+    print("[startup] Cleaning up old uploads...")
+    await cleanup_old_uploads()
     # Init DB connection pool
     print("[startup] Connecting to Neon...")
     await init_pool()

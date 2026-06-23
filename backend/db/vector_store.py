@@ -9,7 +9,7 @@ def _hash_file(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
-async def document_exists(file_hash: str, user_id: str = TEST_USER_ID) -> bool:
+async def document_exists(file_hash: str, user_id: str) -> bool:
     """Redis-first check, falls back to Postgres."""
     # Fast path — Redis
     if await is_document_indexed(file_hash, user_id):
@@ -38,7 +38,7 @@ async def document_exists(file_hash: str, user_id: str = TEST_USER_ID) -> bool:
 async def store_document_chunks(
     content: str,
     file_name: str,
-    user_id: str = TEST_USER_ID,
+    user_id: str = str,
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
 ) -> str:
@@ -86,7 +86,7 @@ async def store_document_chunks(
 async def retrieve_similar_chunks(
     query: str,
     file_hash: str,
-    user_id: str = TEST_USER_ID,
+    user_id: str,
     k: int = 5,
 ) -> list[str]:
     def _embed_query(text: str) -> list[float]:

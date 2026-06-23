@@ -43,7 +43,8 @@ async def document_retriever(
     document_content: str,
     file_name: str,
     query: str,
-    k: int = 5
+    user_id: str,
+    k: int = 5,
 ) -> dict:
     """
     Store document chunks in pgvector on first call (idempotent),
@@ -54,12 +55,14 @@ async def document_retriever(
         file_hash = await store_document_chunks(
             content=document_content,
             file_name=file_name,
+            user_id=user_id
         )
 
         chunks = await retrieve_similar_chunks(
             query=query,
             file_hash=file_hash,
-            k=k
+            k=k,
+            user_id=user_id
         )
 
         return {

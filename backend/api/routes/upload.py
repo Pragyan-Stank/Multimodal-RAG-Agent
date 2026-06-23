@@ -4,11 +4,15 @@ from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from backend.api.schemas import UploadResponse
 from backend.config import PROJECT_ROOT
+import asyncio
+from datetime import datetime, timezone
 
 router=APIRouter()
 
 UPLOAD_DIR=PROJECT_ROOT/"data"/"uploads"
 UPLOAD_DIR.mkdir(parents=True,exist_ok=True)
+
+UPLOAD_MAX_AGE_HOURS = 24
 
 # ---------------------------------
 # Allowed file types and size limit
@@ -40,6 +44,26 @@ def safe_filename(original:str)->str:
     """
     suffix=Path(original).suffix.lower()
     return f"{uuid.uuid4().hex}{suffix}"
+
+
+async def cleanup_old_uploads():
+    """
+    Delete uploaded files older than UPLOAD_MAX_AGE_HOURS.
+    Called once at startup and can be scheduled as a background task.
+    """
+    now = datetime.now(timezone.utc)
+    deleted = 0
+
+    for file_path in UPLOAD_DIR.iterdir():
+        if not file_path.is_file():
+            continue
+        age_hours = (now.timestamp() - file_path.stat().st_mtime) / 3600
+        if age_hours > UPLOAD_MAX_AGE_HOURS:
+            file_path.unlink(missing_ok=True)
+            deleted += 1
+
+    if deleted:
+        print(f"[cleanup] Deleted {deleted} expired upload(s).")
 
 # ---------------------------------
 # Routes
