@@ -38,7 +38,7 @@ async def document_exists(file_hash: str, user_id: str) -> bool:
 async def store_document_chunks(
     content: str,
     file_name: str,
-    user_id: str = str,
+    user_id: str,
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
 ) -> str:
