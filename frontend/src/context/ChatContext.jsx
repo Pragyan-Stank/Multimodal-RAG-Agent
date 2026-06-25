@@ -1,34 +1,61 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { useAuth } from "./AuthContext";
 
 const ChatContext = createContext(null);
 
-const STORAGE_KEY = "neutron_conversations";
+/**
+ * Returns a user-scoped localStorage key so every user
+ * gets their own independent conversation history.
+ */
+function storageKeyForUser(userId) {
+  return userId ? `neutron_conversations_${userId}` : null;
+}
 
-function loadConversations() {
+function loadConversations(userId) {
+  const key = storageKeyForUser(userId);
+  if (!key) return [];
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(key);
     return stored ? JSON.parse(stored) : [];
   } catch {
     return [];
   }
 }
 
-function saveConversations(conversations) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+function saveConversations(userId, conversations) {
+  const key = storageKeyForUser(userId);
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(conversations));
 }
 
 export function ChatProvider({ children }) {
-  const [conversations, setConversations] = useState(() => loadConversations());
+  const { user } = useAuth();
+  const userId = user?.id || null;
+
+  const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingClarification, setPendingClarification] = useState(null);
   // Shape: { threadId: string, question: string, conversationId: string } | null
 
-  // Persist conversations whenever they change
+  // Load conversations whenever the logged-in user changes
   useEffect(() => {
-    saveConversations(conversations);
-  }, [conversations]);
+    if (userId) {
+      setConversations(loadConversations(userId));
+    } else {
+      setConversations([]);
+    }
+    setActiveConversationId(null);
+    setPendingClarification(null);
+  }, [userId]);
+
+  // Persist conversations whenever they change (scoped to current user)
+  useEffect(() => {
+    if (userId) {
+      saveConversations(userId, conversations);
+    }
+  }, [conversations, userId]);
 
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
