@@ -5,74 +5,104 @@ import { useAuth } from "../context/AuthContext";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    login(email, password);
-    navigate("/");
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      await login(email, password);
+      navigate("/");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)] px-4">
-      <div className="w-full max-w-[400px]">
-        <h1
-          className="text-4xl font-bold tracking-tight"
-          style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
-        >
-          Sign In
-        </h1>
+    <div className="auth-page">
+      <div className="auth-card">
+        {/* Brand header */}
+        <div className="auth-brand">
+          <span className="auth-brand-icon">◆</span>
+          <span className="auth-brand-name">Neutron</span>
+        </div>
 
-        <div className="h-[4px] bg-[var(--foreground)] mt-4 mb-10" />
+        <h1 className="auth-title">Welcome back</h1>
+        <p className="auth-subtitle">
+          Sign in to continue to your conversations
+        </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-0">
-          <div className="mb-6">
+        {/* Error toast */}
+        {error && (
+          <div className="auth-error" role="alert">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="8" cy="8" r="7" />
+              <line x1="8" y1="5" x2="8" y2="9" />
+              <circle cx="8" cy="11.5" r="0.5" fill="currentColor" />
+            </svg>
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="auth-field">
+            <label htmlFor="login-email" className="auth-label">Email</label>
             <input
               id="login-email"
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email address"
-              className="w-full bg-transparent border-b-2 border-[var(--foreground)] py-3 text-base focus:outline-none"
-              style={{ fontFamily: '"JetBrains Mono", monospace' }}
+              onChange={(e) => { setEmail(e.target.value); setError(""); }}
+              placeholder="you@example.com"
+              className="auth-input"
+              autoComplete="email"
+              disabled={isSubmitting}
             />
           </div>
 
-          <div className="mb-8">
+          <div className="auth-field">
+            <label htmlFor="login-password" className="auth-label">Password</label>
             <input
               id="login-password"
               type="password"
               required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full bg-transparent border-b-2 border-[var(--foreground)] py-3 text-base focus:outline-none"
-              style={{ fontFamily: '"JetBrains Mono", monospace' }}
+              onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              placeholder="••••••••"
+              className="auth-input"
+              autoComplete="current-password"
+              disabled={isSubmitting}
             />
           </div>
 
           <button
             id="login-submit"
             type="submit"
-            className="w-full bg-[var(--foreground)] text-[var(--background)] uppercase tracking-widest py-4 text-sm font-medium cursor-pointer transition-colors duration-100 hover:bg-[var(--background)] hover:text-[var(--foreground)] border-2 border-[var(--foreground)]"
-            style={{ fontFamily: '"JetBrains Mono", monospace' }}
+            className={`auth-button ${isSubmitting ? "auth-button-loading" : ""}`}
+            disabled={isSubmitting}
           >
-            Sign In
+            {isSubmitting ? (
+              <span className="auth-spinner-wrapper">
+                <span className="auth-spinner" />
+                <span>Signing in…</span>
+              </span>
+            ) : (
+              "Sign In"
+            )}
           </button>
         </form>
 
-        <p
-          className="mt-6 text-sm text-[var(--muted-foreground)]"
-          style={{ fontFamily: '"JetBrains Mono", monospace' }}
-        >
+        <p className="auth-footer">
           Don&apos;t have an account?{" "}
-          <Link
-            to="/signup"
-            className="text-[var(--foreground)] no-underline hover:underline"
-          >
-            Sign up →
+          <Link to="/signup" className="auth-link">
+            Create one →
           </Link>
         </p>
       </div>

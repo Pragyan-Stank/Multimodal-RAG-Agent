@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import client from "../api/client";
 
 const AuthContext = createContext(null);
 
@@ -24,33 +24,72 @@ export function AuthProvider({ children }) {
     setIsLoading(false);
   }, []);
 
-  function login(email, password) {
-    const mockUser = {
-      name: "Pragyan Srivastava",
-      email: email || "pragyan@example.com",
-    };
-    const mockToken = "mock_token";
+  /**
+   * Login — throws a descriptive error if the user doesn't exist
+   * or credentials are wrong, so the calling component can display it.
+   */
+  async function login(email, password) {
+    try {
+      const response = await client.post("/api/v1/auth/login", { email, password });
+      const { access_token, user: returnedUser } = response.data;
 
-    localStorage.setItem("auth_token", mockToken);
-    localStorage.setItem("user", JSON.stringify(mockUser));
-    setToken(mockToken);
-    setUser(mockUser);
+      localStorage.setItem("auth_token", access_token);
+      localStorage.setItem("user", JSON.stringify(returnedUser));
+      setToken(access_token);
+      setUser(returnedUser);
+    } catch (err) {
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+
+      if (status === 401 || status === 404) {
+        throw new Error(
+          detail || "No account found with this email. Please sign up first."
+        );
+      }
+      throw new Error(detail || err.message || "Login failed. Please try again.");
+    }
   }
 
-  function signup(name, email, password) {
-    const mockUser = {
-      name: name || "Pragyan Srivastava",
-      email: email || "pragyan@example.com",
-    };
-    const mockToken = "mock_token";
+  /**
+   * Signup — throws a descriptive error if the email is already taken
+   * or validation fails.
+   */
+  async function signup(name, email, password) {
+    try {
+      const response = await client.post("/api/v1/auth/signup", { name, email, password });
+      const { access_token, user: returnedUser } = response.data;
 
-    localStorage.setItem("auth_token", mockToken);
-    localStorage.setItem("user", JSON.stringify(mockUser));
-    setToken(mockToken);
-    setUser(mockUser);
+      localStorage.setItem("auth_token", access_token);
+      localStorage.setItem("user", JSON.stringify(returnedUser));
+      setToken(access_token);
+      setUser(returnedUser);
+    } catch (err) {
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+
+      if (status === 409) {
+        throw new Error(
+          detail || "An account with this email already exists. Please sign in."
+        );
+      }
+      if (status === 422) {
+        // Pydantic validation error
+        const validationErrors = err.response?.data?.detail;
+        if (Array.isArray(validationErrors)) {
+          const msgs = validationErrors.map((e) => e.msg).join(". ");
+          throw new Error(msgs);
+        }
+        throw new Error("Please check your inputs and try again.");
+      }
+      throw new Error(detail || err.message || "Signup failed. Please try again.");
+    }
   }
 
   function logout() {
+    // Clear user-scoped conversation history before wiping user
+    if (user?.id) {
+      localStorage.removeItem(`neutron_conversations_${user.id}`);
+    }
     localStorage.removeItem("auth_token");
     localStorage.removeItem("user");
     setToken(null);
