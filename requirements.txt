@@ -51,3 +51,6 @@ asyncpg
 langgraph-checkpoint-postgres
 
 upstash-redis
+
+bcrypt 
+pyjwt
