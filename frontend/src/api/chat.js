@@ -5,6 +5,7 @@ import client from "./client";
  * @param {File[]} files - Array of File objects
  * @returns {Promise<{ file_paths: string[], file_names: string[], count: number }>}
  */
+
 export async function uploadFiles(files) {
   const formData = new FormData();
   files.forEach((file) => {
@@ -46,9 +47,15 @@ export async function streamMessage(
   { onToken, onStatus, onDone, onError, onClarification },
   endpoint = "http://localhost:8000/api/v1/chat/stream"
 ) {
+  const token = localStorage.getItem("auth_token");
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers:
+    {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+    ,
     body: JSON.stringify({ query, file_paths, thread_id }),
   });
 
