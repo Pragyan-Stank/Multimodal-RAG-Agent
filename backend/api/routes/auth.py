@@ -32,8 +32,14 @@ async def signup(request: SignupRequest):
 @router.post("/auth/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
     user = await get_user_by_email(request.email)
-    if not user or not verify_password(request.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="No account found with this email. Please sign up first."
+        )
+    if not verify_password(request.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
+
 
     token = create_access_token(user_id=str(user["id"]), email=user["email"])
 
