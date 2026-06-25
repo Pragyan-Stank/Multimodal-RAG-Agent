@@ -1,7 +1,15 @@
+import sys
+import asyncio
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
+from psycopg.rows import dict_row
 
 from backend.api.routes import chat, upload
 from backend import config as app_config
@@ -32,9 +40,18 @@ async def lifespan(app: FastAPI):
     # Initialize Postgres checkpointer and compile graph
     print("[startup] Initializing checkpointer...")
 
-    async with AsyncPostgresSaver.from_conn_string(
-        app_config.NEON_DATABASE_URL
-    ) as checkpointer:
+    async with AsyncConnectionPool(
+        conninfo=app_config.NEON_DATABASE_URL,
+        min_size=0,
+        max_size=5,
+        max_idle=30,
+        kwargs={
+            "autocommit": True,
+            "row_factory": dict_row,
+            "prepare_threshold": 0
+        }
+    ) as pool:
+        checkpointer = AsyncPostgresSaver(conn=pool)
         await checkpointer.setup()  # creates langgraph checkpoint tables if not exist
 
         from backend.graph import graph_builder
