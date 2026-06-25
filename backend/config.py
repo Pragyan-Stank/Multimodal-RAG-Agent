@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     NEON_DATABASE_URL: str = ""
     UPSTASH_REDIS_REST_URL: str = ""
     UPSTASH_REDIS_REST_TOKEN: str = ""
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 24 * 7
     
     @model_validator(mode="after")
     def check_required_keys(self):
@@ -37,6 +40,7 @@ class Settings(BaseSettings):
             "NEON_DATABASE_URL": self.NEON_DATABASE_URL,
             "UPSTASH_REDIS_REST_URL": self.UPSTASH_REDIS_REST_URL,
             "UPSTASH_REDIS_REST_TOKEN": self.UPSTASH_REDIS_REST_TOKEN,
+            "JWT_SECRET_KEY": self.JWT_SECRET_KEY,
         }
         missing = [k for k, v in required.items() if not v or v == "None"]
         if missing:
@@ -72,7 +76,7 @@ GENERATOR_MODEL = "llama-3.3-70b-versatile"
 INTENT_CLASSIFIER_MODEL = "llama-3.1-8b-instant"
 SUMMARIZER_MODEL = "llama-3.3-70b-versatile"
 AUDIO_MODEL = "whisper-large-v3-turbo"
-VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+VISION_MODEL = "qwen/qwen3.6-27b"
 
 
 # ---------------------------------
@@ -148,3 +152,6 @@ NEON_ASYNC_URL = NEON_DATABASE_URL.replace(
 
 UPSTASH_REDIS_REST_URL = settings.UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN = settings.UPSTASH_REDIS_REST_TOKEN
+JWT_SECRET_KEY = settings.JWT_SECRET_KEY
+JWT_ALGORITHM = settings.JWT_ALGORITHM
+JWT_EXPIRE_MINUTES = settings.JWT_EXPIRE_MINUTES
