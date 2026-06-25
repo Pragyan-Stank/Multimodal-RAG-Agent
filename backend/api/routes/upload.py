@@ -6,6 +6,8 @@ from backend.api.schemas import UploadResponse
 from backend.config import PROJECT_ROOT
 import asyncio
 from datetime import datetime, timezone
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from backend.api.dependencies import get_current_user
 
 router=APIRouter()
 
@@ -71,7 +73,8 @@ async def cleanup_old_uploads():
 
 @router.post("/upload",response_model=UploadResponse)
 async def upload_files(
-    files: Annotated[list[UploadFile], File(description="Upload one or more files")]
+    files: Annotated[list[UploadFile], File(description="Upload one or more files")],
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Upload one or more files.

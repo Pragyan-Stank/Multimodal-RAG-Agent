@@ -13,6 +13,7 @@ def merge_extracted_contents(old: dict, new: dict) -> dict:
 
 class AgentState(TypedDict):
     query: str
+    user_id: str
     uploaded_files: list[str]
     pdf_files: list[str]
     audio_files: list[str]

@@ -1,7 +1,7 @@
 import uuid
 import json
 import asyncio
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from langgraph.types import Command
 
@@ -9,7 +9,8 @@ from backend.api.schemas import (
     ChatRequest, ChatResponse,
     ResetRequest, ResetResponse
 )
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
+from backend.api.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -33,9 +34,10 @@ NODE_MESSAGES = {
 # Helpers
 # ---------------------------------
 
-def build_initial_state(request: ChatRequest) -> dict:
+def build_initial_state(request: ChatRequest,user_id: str) -> dict:
     return {
         "query": request.query,
+        "user_id": user_id,
         "uploaded_files": request.file_paths,
         "pdf_files": [],
         "audio_files": [],
@@ -68,7 +70,7 @@ def _sse(event_type: str, data: dict) -> str:
 # ---------------------------------
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest,req:Request):
+async def chat(request: ChatRequest,req:Request,current_user: dict = Depends(get_current_user)):
     """
     Run the agent graph and return the final answer.
     Non-streaming — waits for full completion.
@@ -81,7 +83,7 @@ async def chat(request: ChatRequest,req:Request):
         final_state = None
 
         async for event in graph.astream(
-            build_initial_state(request),
+            build_initial_state(request, str(current_user["id"])),
             config=graph_config,
             stream_mode="values"
         ):
@@ -110,7 +112,7 @@ async def chat(request: ChatRequest,req:Request):
 # ---------------------------------
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest,req:Request):
+async def chat_stream(request: ChatRequest,req:Request,current_user: dict = Depends(get_current_user)):
     """
     Run the agent graph and stream node-level status
     events followed by the final answer token by token.
@@ -118,11 +120,12 @@ async def chat_stream(request: ChatRequest,req:Request):
     thread_id = request.thread_id or str(uuid.uuid4())
     graph_config = build_graph_config(thread_id)
     graph=req.app.state.graph
+    user_id = str(current_user["id"])
 
     async def event_stream():
         try:
             async for event in graph.astream(
-                build_initial_state(request),
+                build_initial_state(request, user_id),
                 config=graph_config,
                 stream_mode="updates"
             ):
@@ -194,7 +197,7 @@ async def reset_chat(request: ResetRequest,req:Request):
 
 
 @router.post("/chat/clarify")
-async def chat_clarify(request: ChatRequest, req: Request):
+async def chat_clarify(request: ChatRequest, req: Request,current_user: dict = Depends(get_current_user)):
     """
     Resume an interrupted graph with user's clarification response.
     thread_id is required — identifies the interrupted session.

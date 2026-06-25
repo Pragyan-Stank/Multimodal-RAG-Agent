@@ -21,7 +21,8 @@ async def route_to_workers(state: dict):
     return [
         Send("executor_worker", {
             "action": action,
-            "query": state["query"]
+            "query": state["query"],
+            "user_id": state["user_id"]
         })
         for action in actions
     ]

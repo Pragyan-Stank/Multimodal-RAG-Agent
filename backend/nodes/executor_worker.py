@@ -5,7 +5,6 @@ from backend.tools.audio_tools import transcribe_audio
 from backend.tools.image_tools import image_analyser
 from backend.tools.web_tools import web_search
 from backend.tools.summarizer import map_reduce_summarizer
-from backend.config import TEST_USER_ID
 
 
 async def executor_worker_node(state: dict) -> dict:
@@ -16,7 +15,7 @@ async def executor_worker_node(state: dict) -> dict:
     """
     action = state["action"]
     query = state["query"]
-
+    user_id = state["user_id"] 
     action_id = action["action_id"]
     worker = action["worker"]
     operation = action["operation"]
@@ -73,7 +72,7 @@ async def executor_worker_node(state: dict) -> dict:
                     document_content=pdf_result["content"],
                     file_name=pdf_result["file_name"],
                     query=action.get("query") or query,
-                    user_id=TEST_USER_ID
+                    user_id=user_id
                 )
 
                 if retrieval_result["success"]:
