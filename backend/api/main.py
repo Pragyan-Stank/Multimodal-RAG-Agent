@@ -7,8 +7,8 @@ from backend.api.routes import chat, upload
 from backend import config as app_config
 from backend.db.connection import init_pool, close_pool
 from backend.api.routes.upload import cleanup_old_uploads
-
-
+from backend.db.migrations import run_migrations
+from backend.api.routes import chat, upload, auth
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,6 +20,10 @@ async def lifespan(app: FastAPI):
     await init_pool()
     print("[startup] DB pool ready.")
 
+    print("[startup] Running migrations...")
+    await run_migrations()
+    print("[startup] Migrations complete.")
+    
     # Warm up embeddings
     print("[startup] Loading embedding model...")
     app_config.get_embeddings()
@@ -69,6 +73,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+app.include_router(auth.router,   prefix="/api/v1", tags=["auth"])
 app.include_router(upload.router, prefix="/api/v1", tags=["upload"])
 app.include_router(chat.router,   prefix="/api/v1", tags=["chat"])
 
