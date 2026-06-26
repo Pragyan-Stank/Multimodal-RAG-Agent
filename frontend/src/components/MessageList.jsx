@@ -16,13 +16,13 @@ export default function MessageList({ messages, isStreaming, steps }) {
           className="text-5xl font-bold tracking-tight text-center"
           style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
         >
-          Ask anything.
+          Ask anything research.
         </h2>
         <p
           className="text-lg text-[var(--muted-foreground)] mt-4 text-center"
           style={{ fontFamily: '"Source Serif 4", Georgia, serif' }}
         >
-          Upload files, paste URLs, or just type.
+          Upload papers, lecture recordings, or ask a research question.
         </p>
       </div>
     );

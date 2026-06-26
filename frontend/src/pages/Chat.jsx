@@ -28,13 +28,13 @@ function buildCallbacks(convId, ctx) {
         
         // Map of known node names to labels just in case message is empty
         const NODE_MESSAGES = {
-          classify_files: "Analyzing uploaded files...",
-          planner: "Planning your request...",
-          executor_worker: "Processing files...",
-          url_router: "Fetching web content...",
-          generate: "Generating answer...",
-          clarification: "Waiting for clarification...",
-          give_up: "Could not determine intent.",
+          classify_files: "Classifying uploaded documents...",
+          planner: "Planning research strategy...",
+          executor_worker: "Extracting content from sources...",
+          url_router: "Resolving references and links...",
+          generate: "Synthesizing findings...",
+          clarification: "Need more context...",
+          give_up: "Could not resolve research query.",
         };
 
         const label = payload.message || NODE_MESSAGES[payload.node] || "Processing...";
@@ -52,12 +52,12 @@ function buildCallbacks(convId, ctx) {
         const getNextExpectedNode = (node) => {
           switch (node) {
             case "classify_files":
-              return { node: "planner", message: "Planning your request..." };
+              return { node: "planner", message: "Planning research strategy..." };
             case "planner":
-              return { node: "executor_worker", message: "Processing files..." };
+              return { node: "executor_worker", message: "Extracting content from sources..." };
             case "executor_worker":
             case "url_router":
-              return { node: "generate", message: "Generating answer..." };
+              return { node: "generate", message: "Synthesizing findings..." };
             default:
               return null;
           }

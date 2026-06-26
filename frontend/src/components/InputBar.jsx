@@ -65,7 +65,7 @@ export default function InputBar({ onSend, disabled }) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleTextareaInput}
-          placeholder="Message Neutron..."
+          placeholder="Ask about a paper, compare methods, or explore a topic..."
           disabled={disabled}
           rows={1}
           className="w-full bg-[var(--background)] text-[var(--foreground)] resize-none border-none outline-none placeholder:text-[var(--muted-foreground)]"

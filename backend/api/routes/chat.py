@@ -20,13 +20,13 @@ router = APIRouter()
 # ---------------------------------
 
 NODE_MESSAGES = {
-    "classify_files":  "Analyzing uploaded files...",
-    "planner":         "Planning your request...",
-    "executor_worker": "Processing files...",
-    "url_router":      "Fetching web content...",
-    "generate":        "Generating answer...",
-    "clarification":   "Waiting for clarification...",
-    "give_up":         "Could not determine intent.",
+    "classify_files":  "Classifying uploaded documents...",
+    "planner":         "Planning research strategy...",
+    "executor_worker": "Extracting content from sources...",
+    "url_router":      "Resolving references and links...",
+    "generate":        "Synthesizing findings...",
+    "clarification":   "Need more context...",
+    "give_up":         "Could not resolve research query.",
 }
 
 
