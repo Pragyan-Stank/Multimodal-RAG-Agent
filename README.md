@@ -145,3 +145,10 @@ In [vector_store.py]:
 - **JWT-Protected API Routes**: Secures FastAPI endpoints (chat streams and file uploads) by validating incoming JSON Web Tokens (JWT).
 - **User History Isolation**: Propagates the verified `user_id` through the LangGraph state to isolate conversation histories and database checkpoints per user.
 
+### 7. Incremental Conversation History Summarization
+- **Sliding Window + Summary**: Retains only the most recent conversation turns verbatim (the last 3 turns plus the current query) in the active LLM context window to optimize token consumption.
+- **Incremental Updates**: As older messages age out of the verbatim window, the system uses a background summarizer (`SUMMARIZER_MODEL`) to merge them into a running, dense `conversation_summary` within the agent state.
+- **Optimized Caching**: Summarization prompts are SHA-256 hashed and cached in Redis to prevent redundant LLM invocations for identical conversation history states.
+- **Context Integration**: The updated conversation summary is dynamically prepended to the context blocks of the `planner` and `generator` nodes.
+
+
