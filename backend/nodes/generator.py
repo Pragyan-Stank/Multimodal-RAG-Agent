@@ -38,9 +38,9 @@ async def generate_node(state: AgentState):
             Extracted Contents:
             {state['extracted_contents']}
 
-            Note: Any source with was_summarized=True was too large for the context
+            Note: Any source with "was_summarized": true in the extracted contents JSON was too large for the context
             window and has been pre-summarized. Treat its content as a summary,
-            not the full original.
+            not the full original. Do not reference internal fields (like "was_summarized") in the final response.
             """
         )
     ]
