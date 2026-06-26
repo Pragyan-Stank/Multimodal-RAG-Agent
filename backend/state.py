@@ -30,6 +30,8 @@ class AgentState(TypedDict):
     web_urls: list[str]
     messages: Annotated[list[BaseMessage], operator.add]
     final_answer: str
+    conversation_summary: str
+    summarized_message_count: int
 
 
 class Action(BaseModel):

@@ -51,7 +51,9 @@ def build_initial_state(request: ChatRequest,user_id: str) -> dict:
         "extracted_contents": {"files": {}},
         "urls_found": [],
         "messages": [],
-        "final_answer": ""
+        "final_answer": "",
+        "conversation_summary": "",
+        "summarized_message_count": 0
     }
 
 

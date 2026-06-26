@@ -30,11 +30,14 @@ async def generate_node(state: AgentState):
     history_str = get_recent_history_str(state.get("messages", []))
     history_block = f"Conversation History:\n{history_str}\n\n" if history_str else ""
     
+    summary = state.get("conversation_summary", "")
+    summary_block = f"Earlier in this conversation (Summary):\n{summary}\n\n" if summary else ""
+    
     messages = [
         SystemMessage(content=GENERATE_SYSTEM_PROMPT),
         HumanMessage(
             content=f"""
-            {history_block}User Query:
+            {summary_block}{history_block}User Query:
             {state['query']}
 
             Task:
