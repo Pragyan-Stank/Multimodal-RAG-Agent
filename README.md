@@ -140,3 +140,8 @@ In [vector_store.py]:
 ### 5. Context Window Guardrails & Token Optimization
 - **`CHAR_LIMIT` Guardrail**: To protect the system against context window overflow, any input source exceeding 20,000 characters is automatically redirected through the Map-Reduce summarizer.
 - **`was_summarized` Flag**: Downstream nodes receive metadata indicating whether a source is a summary or a full text, prompting them to synthesize responses correctly without hallucinating knowledge.
+
+### 6. Session Security & User Isolation
+- **JWT-Protected API Routes**: Secures FastAPI endpoints (chat streams and file uploads) by validating incoming JSON Web Tokens (JWT).
+- **User History Isolation**: Propagates the verified `user_id` through the LangGraph state to isolate conversation histories and database checkpoints per user.
+
