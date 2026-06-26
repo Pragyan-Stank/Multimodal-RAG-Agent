@@ -1,9 +1,10 @@
 from langchain_groq import ChatGroq
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from backend.state import AgentState
 from backend.prompts import GENERATE_SYSTEM_PROMPT
 from backend.config import GENERATOR_MODEL
 from backend.utils.retry import async_llm_retry
+from backend.utils.history import get_recent_history_str
 
 generator_llm = ChatGroq(model=GENERATOR_MODEL)
 
@@ -25,11 +26,15 @@ async def _call_generator(messages: list) -> str:
 async def generate_node(state: AgentState):
     # print(f"[generate] task={state['task']}")
     # print(f"[generate] extracted_contents={state['extracted_contents']}")
+    
+    history_str = get_recent_history_str(state.get("messages", []))
+    history_block = f"Conversation History:\n{history_str}\n\n" if history_str else ""
+    
     messages = [
         SystemMessage(content=GENERATE_SYSTEM_PROMPT),
         HumanMessage(
             content=f"""
-            User Query:
+            {history_block}User Query:
             {state['query']}
 
             Task:
@@ -46,4 +51,7 @@ async def generate_node(state: AgentState):
     ]
 
     final_answer = await _call_generator(messages)
-    return {"final_answer": final_answer}
+    return {
+        "final_answer": final_answer,
+        "messages": [AIMessage(content=final_answer)]
+    }

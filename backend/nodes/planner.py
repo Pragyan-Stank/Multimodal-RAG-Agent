@@ -1,9 +1,10 @@
 from langchain_groq import ChatGroq
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from backend.state import AgentState, PlannerDecision
 from backend.prompts import PLANNER_SYSTEM_PROMPT
 from backend.config import PLANNER_MODEL
 from backend.utils.retry import async_llm_retry
+from backend.utils.history import get_recent_history_str
 
 llm = ChatGroq(model=PLANNER_MODEL)
 planner_llm = llm.with_structured_output(PlannerDecision, method="json_mode")
@@ -25,12 +26,16 @@ async def _call_planner(messages: list) -> PlannerDecision:
 # ---------------------------------
 
 async def planner_node(state: AgentState):
+    print(f"[planner_node] Current thread messages count: {len(state.get('messages', []))}")
+
+    history_str = get_recent_history_str(state.get("messages", []))
+    history_block = f"Conversation History:\n{history_str}\n\n" if history_str else ""
 
     messages = [
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
         HumanMessage(
             content=f"""
-            User Query:
+            {history_block}User Query:
             {state["query"]}
 
             Available PDF Files:
@@ -47,7 +52,7 @@ async def planner_node(state: AgentState):
 
     decision = await _call_planner(messages)
 
-    return {
+    ret = {
         "query": state["query"],
         "task": decision.task,
         "required_actions": [
@@ -57,3 +62,8 @@ async def planner_node(state: AgentState):
         "needs_clarification": decision.needs_clarification,
         "clarification_question": decision.clarification_question
     }
+
+    if decision.needs_clarification and decision.clarification_question:
+        ret["messages"] = [AIMessage(content=decision.clarification_question)]
+
+    return ret

@@ -1,4 +1,5 @@
 from pathlib import Path
+from langchain_core.messages import HumanMessage
 
 
 async def classify_and_route(state: dict) -> dict:
@@ -17,6 +18,7 @@ async def classify_and_route(state: dict) -> dict:
         "image_files": [],
         "extracted_contents": {"files": {}, "clear": True},
         "urls_found": [],
+        "messages": [HumanMessage(content=state.get("query", ""))],
     }
 
     for file in state.get("uploaded_files", []):
