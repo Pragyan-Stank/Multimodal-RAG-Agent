@@ -19,7 +19,61 @@ function buildCallbacks(convId, ctx) {
       ctx.updateLastAssistantMessage(convId, ctx.streamedTextRef.current);
     },
     onStatus: (payload) => {
-      ctx.setStatusLabel(payload.message || "");
+      ctx.setSteps((prev) => {
+        // Filter out any previously guessed "pending" steps
+        const cleaned = prev.filter((s) => s.status !== "pending");
+        
+        // Mark all existing steps as "complete"
+        const completed = cleaned.map((s) => ({ ...s, status: "complete" }));
+        
+        // Map of known node names to labels just in case message is empty
+        const NODE_MESSAGES = {
+          classify_files: "Analyzing uploaded files...",
+          planner: "Planning your request...",
+          executor_worker: "Processing files...",
+          url_router: "Fetching web content...",
+          generate: "Generating answer...",
+          clarification: "Waiting for clarification...",
+          give_up: "Could not determine intent.",
+        };
+
+        const label = payload.message || NODE_MESSAGES[payload.node] || "Processing...";
+
+        // Add the current event as "active"
+        const currentStep = {
+          node: payload.node,
+          message: label,
+          status: "active",
+        };
+        
+        const nextSteps = [...completed, currentStep];
+        
+        // If there's an expected next node, append it as "pending"
+        const getNextExpectedNode = (node) => {
+          switch (node) {
+            case "classify_files":
+              return { node: "planner", message: "Planning your request..." };
+            case "planner":
+              return { node: "executor_worker", message: "Processing files..." };
+            case "executor_worker":
+            case "url_router":
+              return { node: "generate", message: "Generating answer..." };
+            default:
+              return null;
+          }
+        };
+
+        const nextExpected = getNextExpectedNode(payload.node);
+        if (nextExpected) {
+          nextSteps.push({
+            node: nextExpected.node,
+            message: nextExpected.message,
+            status: "pending",
+          });
+        }
+        
+        return nextSteps;
+      });
     },
     onDone: (payload) => {
       if (payload.thread_id) {
@@ -27,7 +81,7 @@ function buildCallbacks(convId, ctx) {
       }
       ctx.setPendingClarification(null);
       ctx.setIsStreaming(false);
-      ctx.setStatusLabel("");
+      ctx.setSteps([]);
     },
     onError: (payload) => {
       ctx.updateLastAssistantMessage(convId, "");
@@ -39,7 +93,7 @@ function buildCallbacks(convId, ctx) {
       });
       ctx.setPendingClarification(null);
       ctx.setIsStreaming(false);
-      ctx.setStatusLabel("");
+      ctx.setSteps([]);
     },
     onClarification: (payload) => {
       if (payload.thread_id) {
@@ -55,7 +109,7 @@ function buildCallbacks(convId, ctx) {
         conversationId: convId,
       });
       ctx.setIsStreaming(false);
-      ctx.setStatusLabel("");
+      ctx.setSteps([]);
     },
   };
 }
@@ -77,7 +131,7 @@ export default function Chat() {
 
   const [uploadedFilePaths, setUploadedFilePaths] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [statusLabel, setStatusLabel] = useState("");
+  const [steps, setSteps] = useState([]);
   const streamedTextRef = useRef("");
 
   // contextRef always points to latest values — no stale closures during streaming
@@ -87,7 +141,7 @@ export default function Chat() {
     addMessage,
     setThreadId,
     setIsStreaming,
-    setStatusLabel,
+    setSteps,
     setPendingClarification,
     streamedTextRef,
   };
@@ -140,7 +194,7 @@ export default function Chat() {
 
       streamedTextRef.current = "";
       contextRef.current.setIsStreaming(true);
-      contextRef.current.setStatusLabel("");
+      contextRef.current.setSteps([]);
 
       try {
         await streamMessage(
@@ -160,7 +214,7 @@ export default function Chat() {
           timestamp: new Date().toISOString(),
         });
         contextRef.current.setIsStreaming(false);
-        contextRef.current.setStatusLabel("");
+        contextRef.current.setSteps([]);
       }
     },
     [activeConversationId, activeConversation?.threadId, uploadedFilePaths, createConversation]
@@ -188,7 +242,7 @@ export default function Chat() {
 
       streamedTextRef.current = "";
       contextRef.current.setIsStreaming(true);
-      contextRef.current.setStatusLabel("");
+      contextRef.current.setSteps([]);
 
       try {
         await streamClarification(
@@ -205,7 +259,7 @@ export default function Chat() {
         });
         contextRef.current.setPendingClarification(null);
         contextRef.current.setIsStreaming(false);
-        contextRef.current.setStatusLabel("");
+        contextRef.current.setSteps([]);
       }
     },
     [pendingClarification]
@@ -233,7 +287,7 @@ export default function Chat() {
         <MessageList
           messages={visibleMessages}
           isStreaming={isStreaming}
-          statusLabel={statusLabel}
+          steps={steps}
         />
 
         {pendingClarification ? (

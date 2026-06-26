@@ -1,7 +1,8 @@
 import { useRef, useEffect } from "react";
 import MessageBubble from "./MessageBubble";
+import StepList from "./StepList";
 
-export default function MessageList({ messages, isStreaming, statusLabel }) {
+export default function MessageList({ messages, isStreaming, steps }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -39,26 +40,20 @@ export default function MessageList({ messages, isStreaming, statusLabel }) {
           <MessageBubble key={message.id} message={message} />
         ))}
 
-        {/* Streaming indicator — show dots only before first token arrives */}
-        {isStreaming && !hasTokens && (
+        {/* Streaming & Step List indicator */}
+        {isStreaming && (
           <div className="flex justify-start">
-            <div className="max-w-[75%] bg-[var(--background)] p-4 pr-6 pl-0">
-              <div className="flex gap-2 items-center h-6">
-                <div className="streaming-dot" />
-                <div className="streaming-dot" />
-                <div className="streaming-dot" />
-              </div>
-              {statusLabel && (
-                <p className="status-label">{statusLabel}</p>
+            <div className="max-w-[75%] bg-[var(--background)] p-4 pr-6 pl-0 w-full">
+              <StepList steps={steps} collapsed={hasTokens} />
+              
+              {!hasTokens && (
+                <div className="flex gap-2 items-center h-6">
+                  <div className="streaming-dot" />
+                  <div className="streaming-dot" />
+                  <div className="streaming-dot" />
+                </div>
               )}
             </div>
-          </div>
-        )}
-
-        {/* Show status label even after tokens start arriving */}
-        {isStreaming && hasTokens && statusLabel && (
-          <div className="flex justify-start pl-0">
-            <p className="status-label">{statusLabel}</p>
           </div>
         )}
 
@@ -67,3 +62,4 @@ export default function MessageList({ messages, isStreaming, statusLabel }) {
     </div>
   );
 }
+
