@@ -65,6 +65,42 @@ api_retry = retry(
 
 
 # ---------------------------------
+# TEMPORARY — prompt cache usage logging
+# ---------------------------------
+
+def _log_cache_usage(result, source: str = "llm") -> None:
+    """
+    Inspect a ChatGroq response for Groq's prompt-caching usage stats
+    and log the cache hit rate. Safe no-op if metadata isn't present
+    (e.g. non-Groq calls, or models that don't support caching).
+    """
+    print(f"[cache:{source}] RAW response_metadata = {getattr(result, 'response_metadata', None)}")
+    print(f"[cache:{source}] RAW usage_metadata = {getattr(result, 'usage_metadata', None)}")
+    try:
+        metadata = getattr(result, "response_metadata", None)
+        if not metadata:
+            return
+
+        usage = metadata.get("token_usage") or metadata.get("usage") or {}
+        cached_tokens = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+        total_prompt_tokens = usage.get("prompt_tokens", 0)
+
+        if total_prompt_tokens:
+            hit_rate = (cached_tokens / total_prompt_tokens) * 100
+            logger.info(
+                f"[cache:{source}] {cached_tokens}/{total_prompt_tokens} "
+                f"prompt tokens cached ({hit_rate:.1f}%)"
+            )
+            print(
+                f"[cache:{source}] {cached_tokens}/{total_prompt_tokens} "
+                f"prompt tokens cached ({hit_rate:.1f}%)"
+            )
+    except Exception as e:
+        # Never let logging break the actual call
+        logger.debug(f"[cache:{source}] usage logging failed: {e}")
+
+
+# ---------------------------------
 # Async retry helpers
 # (uses AsyncRetrying — correct for async functions)
 # ---------------------------------
@@ -87,7 +123,8 @@ async def async_llm_retry(func, *args, **kwargs):
         with attempt:
             result = func(*args, **kwargs)
             if inspect.iscoroutine(result):
-                return await result
+                result = await result
+            _log_cache_usage(result, source="llm")
             return result
 
 
