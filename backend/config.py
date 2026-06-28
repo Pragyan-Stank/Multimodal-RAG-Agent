@@ -71,10 +71,10 @@ os.environ["LANGSMITH_PROJECT"] = "Multimodal agent trace5"
 # Models
 # ---------------------------------
 
-PLANNER_MODEL = "llama-3.3-70b-versatile"
-GENERATOR_MODEL = "llama-3.3-70b-versatile"
-INTENT_CLASSIFIER_MODEL = "llama-3.1-8b-instant"
-SUMMARIZER_MODEL = "llama-3.3-70b-versatile"
+PLANNER_MODEL = "openai/gpt-oss-120b"
+GENERATOR_MODEL = "openai/gpt-oss-120b"
+INTENT_CLASSIFIER_MODEL = "openai/gpt-oss-20b"
+SUMMARIZER_MODEL = "openai/gpt-oss-120b"
 AUDIO_MODEL = "whisper-large-v3-turbo"
 VISION_MODEL = "qwen/qwen3.6-27b"
 
